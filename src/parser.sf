@@ -1,0 +1,192 @@
+
+-- List definition
+
+data PolyList [A] = Nil
+                  | Cons A (PolyList[A]);
+
+-- String definition
+
+type PolyString = PolyList[Char];
+
+let rec fromString (str : String) : PolyString =
+    if length(str) == 0 then
+        (Nil[Char])
+    else
+        (Cons[Char] str.charAt(0) (fromString str.substring(1)));
+
+let rec toString (l : PolyString) : String =
+    case l of
+        Nil         -> ""
+     |  Cons x xs   -> x.toString().concat(toString xs);
+
+-- Parser type definition
+
+type Parser [A] = PolyString -> PolyList[(A, PolyString)];
+
+-- Utilities
+
+let singleton [A] (x : A) : PolyList[A] =
+    Cons[A] x (Nil[A]);
+
+let rec map [A, B] (f : A -> B) (l : PolyList[A]) : PolyList[B] =
+    case l of
+        Nil             ->      Nil[B]
+     |  Cons x xs       ->      Cons[B] (f x) (map [A, B] f xs);
+
+let rec concat2 [A] (a : PolyList[A]) (b : PolyList[A]) : PolyList[A] =
+    case a of
+        Nil         ->  b
+      | Cons x xs   ->  Cons[A] x (concat2[A] xs b);
+
+let rec concat [A] (l : PolyList[PolyList[A]]) : PolyList[A] =
+    case l of
+        Nil         ->  Nil[A]
+     |  Cons x xs   ->  concat2[A] x (concat[A] xs);
+
+-- Primitive Parsers
+
+let result [V] (value : V) : Parser[V] =
+    \(inp : PolyString) -> singleton [(V, PolyString)] (value, inp);
+
+let zero [V] : Parser[V] =
+    \(inp : PolyString) -> Nil[(V, PolyString)];
+
+let item : Parser[Char] =
+    \(inp : PolyString) ->
+        case inp of
+            Nil         ->      Nil[(Char, PolyString)]
+          | Cons c xs   ->      singleton [(Char, PolyString)] (c, xs);
+
+
+
+
+-- Combinators
+
+let bind [A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
+    \(inp : PolyString) ->
+        concat [(B, PolyString)]
+               (map [(A, PolyString), PolyList[(B, PolyString)]]
+                    (\(v : (A, PolyString)) -> f v._1 v._2) (p inp));
+
+let seq [A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
+    bind [A, (A, B)] p (\(x : A) ->
+    bind [B, (A, B)] q (\(y : B) ->
+    result [(A, B)] (x, y)));
+
+let sat (f : Char -> Bool) : Parser[Char] =
+    bind [Char, Char] item (\(x : Char) -> if f x then (result [Char] x) else zero [Char]);
+
+let char (x : Char) : Parser[Char] =
+    sat (\(y : Char) -> x == y);
+
+let digit : Parser[Char] =
+    sat (\(x : Char) -> '0' <= x && x <= '9');
+
+let upper : Parser[Char] =
+    sat (\(x : Char) -> 'A' <= x && x <= 'Z');
+
+let lower : Parser[Char] =
+    sat (\(x : Char) -> 'a' <= x && x <= 'z');
+
+let plus [A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    \(inp : PolyString) ->
+        concat2 [(A, PolyString)] (p inp) (q inp);
+
+let letter : Parser[Char] =
+    plus [Char] lower upper;
+
+let alphanum : Parser[Char] =
+    plus [Char] letter digit;
+
+--let rec word : Parser[PolyString] =
+--    bind [Char, PolyString] letter (\(x : Char) ->
+--    bind [PolyString, PolyString] word (\(xs : PolyString) ->
+--    result [PolyString] (Cons[Char] x xs)));
+
+
+let rec string (s : PolyString) : Parser[PolyString] =
+    case s of
+        Nil         ->  result (Nil[Char])
+     |  Cons x xs   ->
+            bind [Char, PolyString] (char x) (\(dummy1 : Char) ->
+            bind [PolyString, PolyString] (string xs) (\(dummy2 : PolyString) ->
+            result (Cons[Char] x xs)));
+
+
+-- Repetition
+
+let println (s : String) = java.lang.System.out.println(s);
+let print (s : String) = java.lang.System.out.print(s);
+
+--let rec many [A] (p : Parser[A]) : Parser[PolyList[A]] =
+--    (let nMany = bind [A, PolyList[A]] p (\(x : A) ->
+--                 bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
+--                 result [PolyList[A]] (Cons[A] x xs)));
+--    plus [PolyList[A]] nMany (zero [PolyList[A]]));
+
+let rec many [A] (p : Parser[A]) : Parser[PolyList[A]] =
+    bind [A, PolyList[A]] p (\(x : A) ->
+    bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
+    result [PolyList[A]] (Cons[A] x xs)));
+
+let many1 [A] (p : Parser[A]) : Parser[PolyList[A]] =
+    bind [A, PolyList[A]] p (\(x : A) ->
+    bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
+    result [PolyList[A]] (Cons[A] x xs)));
+
+
+let ident : Parser[PolyString] =
+    bind [Char, PolyString] lower (\(x : Char) ->
+    bind [PolyString, PolyString] (many [Char] alphanum) (\(xs : PolyString) ->
+    result [PolyString] (Cons[Char] x xs)));
+
+--result[Int] 1
+
+let rec polyStringResultToString (r : PolyList[(PolyString, PolyString)]) : String =
+    case r of
+        Nil         -> ""
+     |  Cons x xs   -> "(".concat(toString x._1).concat(", `").concat(toString x._2).concat("`), ").concat(polyStringResultToString xs);
+
+let rec charResultToString (r : PolyList[(Char, PolyString)]) : String =
+    case r of
+        Nil         -> ""
+     |  Cons x xs   -> "(".concat(x._1.toString()).concat(", `").concat(toString x._2).concat("`), ").concat(charResultToString xs);
+
+
+
+let printStringResult (r : PolyList[(PolyString, PolyString)]) = print (polyStringResultToString r);
+let printCharResult (r : PolyList[(Char, PolyString)]) = print (charResultToString r);
+
+
+{
+    print "char 'a' (fromString \"abcd\") = [";
+    printCharResult (char 'a' (fromString "abcd"));
+    println "]";
+
+    print "upper (fromString \"ABC\") = [";
+    printCharResult (upper (fromString "ABC"));
+    println "]";
+
+    print "string (fromString \"abc\") (fromString \"abcd\") = [";
+    printStringResult (string (fromString "abc") (fromString "abcd"));
+    println "]";
+
+    print "many (char 'a') (fromString \"aaab\") = [";
+    printStringResult (many[Char] (char 'a') (fromString "aaab"));
+    println "]";
+
+    print "many1 (char 'a') (fromString \"aaab\") = [";
+    printStringResult (many1[Char] (char 'a') (fromString "aaab"));
+    println "]";
+
+    print "plus (char 'a') (char 'b') (fromString \"aaab\") = [";
+    printCharResult (plus[Char] (char 'a') (char 'b') (fromString "aaab"));
+    println "]";
+
+    print "plus (string \"aa\") (string \"aaa\") (fromString \"aaab\") = [";
+    printStringResult (plus[PolyString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
+    println "]";
+
+
+    ()
+}

@@ -98,6 +98,7 @@ let letter : Parser[Char] =
 let alphanum : Parser[Char] =
     plus [Char] letter digit;
 
+-- FIXME: Issue#98
 --let rec word : Parser[PolyString] =
 --    bind [Char, PolyString] letter (\(x : Char) ->
 --    bind [PolyString, PolyString] word (\(xs : PolyString) ->
@@ -115,19 +116,11 @@ let rec string (s : PolyString) : Parser[PolyString] =
 
 -- Repetition
 
-let println (s : String) = java.lang.System.out.println(s);
-let print (s : String) = java.lang.System.out.print(s);
-
---let rec many [A] (p : Parser[A]) : Parser[PolyList[A]] =
---    (let nMany = bind [A, PolyList[A]] p (\(x : A) ->
---                 bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
---                 result [PolyList[A]] (Cons[A] x xs)));
---    plus [PolyList[A]] nMany (zero [PolyList[A]]));
-
 let rec many [A] (p : Parser[A]) : Parser[PolyList[A]] =
-    bind [A, PolyList[A]] p (\(x : A) ->
-    bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
-    result [PolyList[A]] (Cons[A] x xs)));
+    (let nMany = bind [A, PolyList[A]] p (\(x : A) ->
+                 bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
+                 result [PolyList[A]] (Cons[A] x xs)));
+    plus [PolyList[A]] nMany (zero [PolyList[A]]));
 
 let many1 [A] (p : Parser[A]) : Parser[PolyList[A]] =
     bind [A, PolyList[A]] p (\(x : A) ->
@@ -140,7 +133,44 @@ let ident : Parser[PolyString] =
     bind [PolyString, PolyString] (many [Char] alphanum) (\(xs : PolyString) ->
     result [PolyString] (Cons[Char] x xs)));
 
---result[Int] 1
+-- test helper functions
+
+let error (msg : String) = {
+    java.lang.System.err.println(msg);
+    java.lang.System.exit(1);
+    ()
+};
+
+let assert (b : Bool) =
+    if b then
+        ()
+    else
+        error "assert failed!";
+
+let rec listEqual [A] (a : PolyList[A]) (b : PolyList[A]) : Bool =
+    case a of
+        Nil         -> { case b of Nil -> True | Cons x xs -> False }
+     |  Cons x xs   -> case b of
+                            Nil          -> False
+                         |  Cons xb xsb  -> if x == xb then listEqual[A] xs xsb else False;
+
+let rec parseListEqual [A] (a : PolyList[(A, PolyString)]) (b : PolyList[(A, PolyString)]) : Bool =
+    case a of
+        Nil         -> { case b of Nil -> True | Cons x xs -> False }
+     |  Cons x xs   -> case b of
+                            Nil          -> False
+                         |  Cons xb xsb  -> if x._1 == xb._1 && (listEqual[Char] x._2 xb._2) then
+                                                parseListEqual[A] xs xsb
+                                            else False;
+
+let rec parseStringEqual (a : PolyList[(PolyString, PolyString)]) (b : PolyList[(PolyString, PolyString)]) : Bool =
+    case a of
+        Nil         -> { case b of Nil -> True | Cons x xs -> False }
+     |  Cons x xs   -> case b of
+                            Nil          -> False
+                         |  Cons xb xsb  -> if (listEqual[Char] x._1 xb._1) && (listEqual[Char] x._2 xb._2) then
+                                                (parseStringEqual xs xsb)
+                                            else False;
 
 let rec polyStringResultToString (r : PolyList[(PolyString, PolyString)]) : String =
     case r of
@@ -152,40 +182,71 @@ let rec charResultToString (r : PolyList[(Char, PolyString)]) : String =
         Nil         -> ""
      |  Cons x xs   -> "(".concat(x._1.toString()).concat(", `").concat(toString x._2).concat("`), ").concat(charResultToString xs);
 
+let println (s : String) = java.lang.System.out.println(s);
+let print (s : String) = java.lang.System.out.print(s);
 
-
-let printStringResult (r : PolyList[(PolyString, PolyString)]) = print (polyStringResultToString r);
-let printCharResult (r : PolyList[(Char, PolyString)]) = print (charResultToString r);
+let printStringResult (r : PolyList[(PolyString, PolyString)]) = {
+    print "[";
+    print (polyStringResultToString r);
+    print "]"
+};
+let printCharResult (r : PolyList[(Char, PolyString)]) = {
+    print "[";
+    print (charResultToString r);
+    print "]"
+};
 
 
 {
-    print "char 'a' (fromString \"abcd\") = [";
-    printCharResult (char 'a' (fromString "abcd"));
-    println "]";
+    println "------- Test Utilities -------";
 
-    print "upper (fromString \"ABC\") = [";
-    printCharResult (upper (fromString "ABC"));
-    println "]";
+    print "testing listEqual: ";
+    assert (listEqual[Int] (singleton[Int] 1) (singleton[Int] 1));
+    println "\t...ok";
 
-    print "string (fromString \"abc\") (fromString \"abcd\") = [";
-    printStringResult (string (fromString "abc") (fromString "abcd"));
-    println "]";
+    print "testing map: ";
+    assert (listEqual[Char] (map[Char,Char] (\(c : Char) -> 'm') (fromString "hello")) (fromString "mmmmm"));
+    println "\t...ok";
 
-    print "many (char 'a') (fromString \"aaab\") = [";
+    println "\n------- Test Combinators -------";
+
+    print "testing char 'a' (fromString \"abcd\"): ";
+    assert (parseListEqual[Char]
+                          (char 'a' (fromString "abcd"))
+                          (singleton[(Char, PolyString)] ('a', (fromString "bcd"))));
+    println "\t...ok";
+
+    print "testing upper (fromString \"ABC\"): ";
+    assert (parseListEqual[Char]
+                          (upper (fromString "ABC"))
+                          (singleton[(Char, PolyString)] ('A', (fromString "BC"))));
+    println "\t...ok";
+
+    print "testing string (fromString \"abc\") (fromString \"abcd\"): ";
+    assert (parseStringEqual (string (fromString "abc") (fromString "abcd"))
+                             (singleton[(PolyString, PolyString)] ((fromString "abc"), (fromString "d"))));
+    println "\t...ok";
+
+    print "testing many (char 'a') (fromString \"aaab\"): ";
+    -- Should be [("", "aaab"), ("a", "aab"), ("aa", "ab"), ("aaa", "b")]
     printStringResult (many[Char] (char 'a') (fromString "aaab"));
-    println "]";
+    println "\t...ok";
 
-    print "many1 (char 'a') (fromString \"aaab\") = [";
+    print "testing many1 (char 'a') (fromString \"aaab\"): ";
+    -- Should be [("a", "aab"), ("aa", "ab"), ("aaa", "b")]
     printStringResult (many1[Char] (char 'a') (fromString "aaab"));
-    println "]";
+    println "\t...ok";
 
-    print "plus (char 'a') (char 'b') (fromString \"aaab\") = [";
-    printCharResult (plus[Char] (char 'a') (char 'b') (fromString "aaab"));
-    println "]";
+    print "testing plus (char 'a') (char 'b') (fromString \"aaab\"): ";
+    assert (parseListEqual[Char] (plus[Char] (char 'a') (char 'b') (fromString "aaab"))
+                                 (singleton[(Char, PolyString)] ('a', fromString "aab")));
+    println "\t...ok";
 
-    print "plus (string \"aa\") (string \"aaa\") (fromString \"aaab\") = [";
+    println "testing plus (string \"aa\") (string \"aaa\") (fromString \"aaab\"): ";
     printStringResult (plus[PolyString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
-    println "]";
+    assert (parseStringEqual (plus[PolyString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab")) (concat2[(PolyString, PolyString)] (singleton[(PolyString, PolyString)] (fromString "aa", fromString "ab"))
+                                               (singleton[(PolyString, PolyString)] (fromString "aaa", fromString "b"))));
+    println "\t...ok";
 
 
     ()

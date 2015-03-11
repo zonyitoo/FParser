@@ -25,6 +25,12 @@ type Parser [A] = PolyString -> PolyList[(A, PolyString)];
 
 -- Utilities
 
+let error (msg : String) = {
+    java.lang.System.err.println(msg);
+    java.lang.System.exit(1);
+    ()
+};
+
 let singleton [A] (x : A) : PolyList[A] =
     Cons[A] x (Nil[A]);
 
@@ -42,6 +48,23 @@ let rec concat [A] (l : PolyList[PolyList[A]]) : PolyList[A] =
     case l of
         Nil         ->  Nil[A]
      |  Cons x xs   ->  concat2[A] x (concat[A] xs);
+
+let rec len [A] (l : PolyList[A]) : Int =
+    case l of
+        Nil         ->  0
+     |  Cons _ xs   ->  1 + (len[A] xs);
+
+-- Not ready
+--let car [A] (l : PolyList[A]) : A =
+--    case l of
+--        Nil         -> error "Call `car` on a empty list"
+--     |  Cons x xs   -> x;
+
+-- Not ready
+--let cdr [A] (l : PolyList[A]) : PolyList[A] =
+--    case l of
+--        Nil         -> error "Call `cdr` on a empty list"
+--     |  Cons x xs   -> xs;
 
 -- Primitive Parsers
 
@@ -80,13 +103,19 @@ let char (x : Char) : Parser[Char] =
     sat (\(y : Char) -> x == y);
 
 let digit : Parser[Char] =
-    sat (\(x : Char) -> '0' <= x && x <= '9');
+    sat (\(x : Char) -> java.lang.Character.isDigit(x));
 
 let upper : Parser[Char] =
-    sat (\(x : Char) -> 'A' <= x && x <= 'Z');
+    sat (\(x : Char) -> java.lang.Character.isUpperCase(x));
 
 let lower : Parser[Char] =
-    sat (\(x : Char) -> 'a' <= x && x <= 'z');
+    sat (\(x : Char) -> java.lang.Character.isLowerCase(x));
+
+let space : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isSpaceChar(x));
+
+let whitespace : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isWhitespace(x));
 
 let plus [A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     \(inp : PolyString) ->
@@ -97,13 +126,6 @@ let letter : Parser[Char] =
 
 let alphanum : Parser[Char] =
     plus [Char] letter digit;
-
--- FIXME: Issue#98
---let rec word : Parser[PolyString] =
---    bind [Char, PolyString] letter (\(x : Char) ->
---    bind [PolyString, PolyString] word (\(xs : PolyString) ->
---    result [PolyString] (Cons[Char] x xs)));
-
 
 let rec string (s : PolyString) : Parser[PolyString] =
     case s of
@@ -117,16 +139,18 @@ let rec string (s : PolyString) : Parser[PolyString] =
 -- Repetition
 
 let rec many [A] (p : Parser[A]) : Parser[PolyList[A]] =
-    (let nMany = bind [A, PolyList[A]] p (\(x : A) ->
-                 bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
-                 result [PolyList[A]] (Cons[A] x xs)));
-    plus [PolyList[A]] nMany (zero [PolyList[A]]));
+    plus [PolyList[A]] (bind [A, PolyList[A]] p (\(x : A) ->
+                        bind [PolyList[A], PolyList[A]] (many[A] p) (\(xs : PolyList[A]) ->
+                        result [PolyList[A]] (Cons[A] x xs))))
+                       (result[PolyList[A]] (Nil[A]));
 
 let many1 [A] (p : Parser[A]) : Parser[PolyList[A]] =
     bind [A, PolyList[A]] p (\(x : A) ->
     bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
     result [PolyList[A]] (Cons[A] x xs)));
 
+let word : Parser[PolyString] =
+    many1[Char] letter;
 
 let ident : Parser[PolyString] =
     bind [Char, PolyString] lower (\(x : Char) ->
@@ -222,6 +246,11 @@ let printCharResult (r : PolyList[(Char, PolyString)]) = {
                           (singleton[(Char, PolyString)] ('A', (fromString "BC"))));
     println "\t...ok";
 
+    print "testing letter (fromString \"abcd\"): ";
+    printCharResult (letter (fromString "abcd"));
+    assert (parseListEqual[Char] (letter (fromString "abcd")) (singleton[(Char, PolyString)] ('a', (fromString "bcd"))));
+    println "\t...ok";
+
     print "testing string (fromString \"abc\") (fromString \"abcd\"): ";
     assert (parseStringEqual (string (fromString "abc") (fromString "abcd"))
                              (singleton[(PolyString, PolyString)] ((fromString "abc"), (fromString "d"))));
@@ -248,6 +277,9 @@ let printCharResult (r : PolyList[(Char, PolyString)]) = {
                                                (singleton[(PolyString, PolyString)] (fromString "aaa", fromString "b"))));
     println "\t...ok";
 
+    println "testing word (fromString \"aaabcd abcd\")";
+    printStringResult (word (fromString "aaabcd abcd"));
+    println "\t...ok";
 
     ()
 }

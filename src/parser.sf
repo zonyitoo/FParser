@@ -167,7 +167,7 @@ let ident : Parser[PString] =
     bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
     result[PString] (Cons[Char] x xs)));
 
-let nat : Parser[Int] = {
+let natural : Parser[Int] = {
     let eval (xs : PList[Char]) =
         foldl[Int, Int] (\(b : Int) (a : Int) -> 10 * b + a)
                         0
@@ -178,8 +178,8 @@ let nat : Parser[Int] = {
 
 -- Issue#109
 --let int : Parser[Int] =
---    plus[Int] (bind[Char,Int] (char '-') (\(__ : Char) -> bind[Int,Int] nat (\(n : Int) -> -n)))
---              nat;
+--    plus[Int] (bind[Char,Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> -n)))
+--              natural;
 
 -- Repetition with seperators
 
@@ -194,6 +194,40 @@ let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] = {
 let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
     plus[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
 
+
+-- Simple arithmetic expression
+-- FIXME: Issue110
+
+let bracket[A, B, C] (open : Parser[A]) (p : Parser[B]) (close : Parser[C]) : Parser[B] =
+    bind[A, B] open   (\(o : A) ->
+    bind[B, B] p      (\(x : B) ->
+    bind[C, B] close  (\(c : C) ->
+    result[B] x)));
+
+let operation = {
+    let addop (a : Int) (b : Int) : Int = a + b;
+    let subop (a : Int) (b : Int) : Int = a - b;
+    let mulop (a : Int) (b : Int) : Int = a * b;
+    let divop (a : Int) (b : Int) : Int = a / b;
+
+    let add_sub = plus[Int -> Int -> Int]
+        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
+        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
+    let mul_div = plus[Int -> Int -> Int]
+        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
+        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
+
+    plus[Int -> Int -> Int] add_sub mul_div
+};
+
+let rec expr : Parser[Int] =
+    bind[Int, Int] expr (\(x : Int) ->
+    bind[Int -> Int -> Int, Int] operation (\(f : Int -> Int -> Int) ->
+    bind[Int, Int] factor (\(y : Int) ->
+    result[Int] (f x y))))
+and
+    factor : Parser[Int] =
+        plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
 
 -- Test helper functions
 
@@ -340,12 +374,16 @@ let printIntResult (r : PList[(Int, PString)]) = {
     printStringResult (word (fromString "aaabcd abcd"));
     println "\t...ok";
 
-    println "testing nat (fromString \"12345\"): ";
-    printIntResult (nat (fromString "12345"));
+    println "testing natural (fromString \"12345\"): ";
+    printIntResult (natural (fromString "12345"));
     println "\t...ok";
 
     println "testing sepby1[PString, Char] word (char ',') (fromString \"abc,def\"): ";
     assert (len[(PList[PString], PString)] (sepby1[PString, Char] (word) (char ',') (fromString "abc,def")) == 6);
+    println "\t...ok";
+
+    println "testing expr (fromString \"123\"): ";
+    printIntResult (expr (fromString "123"));
     println "\t...ok";
 
     ()

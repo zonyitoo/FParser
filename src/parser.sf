@@ -1,27 +1,27 @@
 
 -- List definition
 
-data PolyList [A] = Nil
-                  | Cons A (PolyList[A]);
+data PList[A] = Nil
+              | Cons A (PList[A]);
 
 -- String definition
 
-type PolyString = PolyList[Char];
+type PString = PList[Char];
 
-let rec fromString (str : String) : PolyString =
+let rec fromString (str : String) : PString =
     if length(str) == 0 then
         (Nil[Char])
     else
         (Cons[Char] str.charAt(0) (fromString str.substring(1)));
 
-let rec toString (l : PolyString) : String =
+let rec toString (l : PString) : String =
     case l of
         Nil         -> ""
      |  Cons x xs   -> x.toString().concat(toString xs);
 
 -- Parser type definition
 
-type Parser [A] = PolyString -> PolyList[(A, PolyString)];
+type Parser[A] = PString -> PList[(A, PString)];
 
 -- Utilities
 
@@ -31,73 +31,87 @@ let error (msg : String) = {
     ()
 };
 
-let singleton [A] (x : A) : PolyList[A] =
+let singleton[A] (x : A) : PList[A] =
     Cons[A] x (Nil[A]);
 
-let rec map [A, B] (f : A -> B) (l : PolyList[A]) : PolyList[B] =
+let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[B] =
     case l of
         Nil             ->      Nil[B]
-     |  Cons x xs       ->      Cons[B] (f x) (map [A, B] f xs);
+     |  Cons x xs       ->      Cons[B] (f x) (map[A, B] f xs);
 
-let rec concat2 [A] (a : PolyList[A]) (b : PolyList[A]) : PolyList[A] =
+let rec foldl[A, B] (f : B -> A -> B) (z : B) (l : PList[A]) : B =
+    case l of
+        Nil             ->      z
+     |  Cons x xs       ->      foldl[A, B] f (f z x) xs;
+
+let rec foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+    case l of
+        Nil             ->      z
+     |  Cons x xs       ->      f x (foldr[A, B] f z xs);
+
+let rec concat2[A] (a : PList[A]) (b : PList[A]) : PList[A] =
     case a of
         Nil         ->  b
       | Cons x xs   ->  Cons[A] x (concat2[A] xs b);
 
-let rec concat [A] (l : PolyList[PolyList[A]]) : PolyList[A] =
+let rec concat[A] (l : PList[PList[A]]) : PList[A] =
     case l of
         Nil         ->  Nil[A]
      |  Cons x xs   ->  concat2[A] x (concat[A] xs);
 
-let rec len [A] (l : PolyList[A]) : Int =
+let rec len[A] (l : PList[A]) : Int =
     case l of
         Nil         ->  0
      |  Cons _ xs   ->  1 + (len[A] xs);
 
 -- Not ready
---let car [A] (l : PolyList[A]) : A =
+--let car [A] (l : PList[A]) : A =
 --    case l of
 --        Nil         -> error "Call `car` on a empty list"
 --     |  Cons x xs   -> x;
 
 -- Not ready
---let cdr [A] (l : PolyList[A]) : PolyList[A] =
+--let cdr [A] (l : PList[A]) : PList[A] =
 --    case l of
 --        Nil         -> error "Call `cdr` on a empty list"
 --     |  Cons x xs   -> xs;
 
 -- Primitive Parsers
 
-let result [V] (value : V) : Parser[V] =
-    \(inp : PolyString) -> singleton [(V, PolyString)] (value, inp);
+let result[V] (value : V) : Parser[V] =
+    \(inp : PString) -> singleton[(V, PString)] (value, inp);
 
-let zero [V] : Parser[V] =
-    \(inp : PolyString) -> Nil[(V, PolyString)];
+let zero[V] : Parser[V] =
+    \(inp : PString) -> Nil[(V, PString)];
 
 let item : Parser[Char] =
-    \(inp : PolyString) ->
+    \(inp : PString) ->
         case inp of
-            Nil         ->      Nil[(Char, PolyString)]
-          | Cons c xs   ->      singleton [(Char, PolyString)] (c, xs);
+            Nil         ->      Nil[(Char, PString)]
+          | Cons c xs   ->      singleton[(Char, PString)] (c, xs);
 
 
 
 
 -- Combinators
 
-let bind [A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
-    \(inp : PolyString) ->
-        concat [(B, PolyString)]
-               (map [(A, PolyString), PolyList[(B, PolyString)]]
-                    (\(v : (A, PolyString)) -> f v._1 v._2) (p inp));
+let bind[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
+    \(inp : PString) ->
+        concat[(B, PString)]
+              (map[(A, PString), PList[(B, PString)]]
+                  (\(v : (A, PString)) -> f v._1 v._2) (p inp));
 
-let seq [A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
-    bind [A, (A, B)] p (\(x : A) ->
-    bind [B, (A, B)] q (\(y : B) ->
+let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
+    bind[A, (A, B)] p (\(x : A) ->
+    bind[B, (A, B)] q (\(y : B) ->
     result [(A, B)] (x, y)));
 
+let plus[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    \(inp : PString) ->
+        concat2[(A, PString)] (p inp) (q inp);
+
 let sat (f : Char -> Bool) : Parser[Char] =
-    bind [Char, Char] item (\(x : Char) -> if f x then (result [Char] x) else zero [Char]);
+    bind[Char, Char] item (\(x : Char) -> if f x then (result[Char] x) else zero[Char]);
 
 let char (x : Char) : Parser[Char] =
     sat (\(y : Char) -> x == y);
@@ -117,47 +131,71 @@ let space : Parser[Char] =
 let whitespace : Parser[Char] =
     sat (\(x : Char) -> java.lang.Character.isWhitespace(x));
 
-let plus [A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
-    \(inp : PolyString) ->
-        concat2 [(A, PolyString)] (p inp) (q inp);
-
 let letter : Parser[Char] =
-    plus [Char] lower upper;
+    plus[Char] lower upper;
 
 let alphanum : Parser[Char] =
-    plus [Char] letter digit;
+    plus[Char] letter digit;
 
-let rec string (s : PolyString) : Parser[PolyString] =
+let rec string (s : PString) : Parser[PString] =
     case s of
         Nil         ->  result (Nil[Char])
      |  Cons x xs   ->
-            bind [Char, PolyString] (char x) (\(dummy1 : Char) ->
-            bind [PolyString, PolyString] (string xs) (\(dummy2 : PolyString) ->
+            bind[Char, PString] (char x) (\(dummy1 : Char) ->
+            bind[PString, PString] (string xs) (\(dummy2 : PString) ->
             result (Cons[Char] x xs)));
 
 
 -- Repetition
 
-let rec many [A] (p : Parser[A]) : Parser[PolyList[A]] =
-    plus [PolyList[A]] (bind [A, PolyList[A]] p (\(x : A) ->
-                        bind [PolyList[A], PolyList[A]] (many[A] p) (\(xs : PolyList[A]) ->
-                        result [PolyList[A]] (Cons[A] x xs))))
-                       (result[PolyList[A]] (Nil[A]));
+let rec many[A] (p : Parser[A]) : Parser[PList[A]] =
+    plus[PList[A]] (bind[A, PList[A]] p (\(x : A) ->
+                    bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
+                    result[PList[A]] (Cons[A] x xs))))
+                   (result[PList[A]] (Nil[A]));
 
-let many1 [A] (p : Parser[A]) : Parser[PolyList[A]] =
-    bind [A, PolyList[A]] p (\(x : A) ->
-    bind [PolyList[A], PolyList[A]] (many [A] p) (\(xs : PolyList[A]) ->
-    result [PolyList[A]] (Cons[A] x xs)));
+let many1[A] (p : Parser[A]) : Parser[PList[A]] =
+    bind[A, PList[A]] p (\(x : A) ->
+    bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
+    result[PList[A]] (Cons[A] x xs)));
 
-let word : Parser[PolyString] =
+let word : Parser[PString] =
     many1[Char] letter;
 
-let ident : Parser[PolyString] =
-    bind [Char, PolyString] lower (\(x : Char) ->
-    bind [PolyString, PolyString] (many [Char] alphanum) (\(xs : PolyString) ->
-    result [PolyString] (Cons[Char] x xs)));
+let ident : Parser[PString] =
+    bind[Char, PString] lower (\(x : Char) ->
+    bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
+    result[PString] (Cons[Char] x xs)));
 
--- test helper functions
+let nat : Parser[Int] = {
+    let eval (xs : PList[Char]) =
+        foldl[Int, Int] (\(b : Int) (a : Int) -> 10 * b + a)
+                        0
+                        (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 10)) xs);
+
+    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs))
+};
+
+-- Issue#109
+--let int : Parser[Int] =
+--    plus[Int] (bind[Char,Int] (char '-') (\(__ : Char) -> bind[Int,Int] nat (\(n : Int) -> -n)))
+--              nat;
+
+-- Repetition with seperators
+
+let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] = {
+    let rep[A, B] (p : Parser[A]) : Parser[A] =
+        bind[B, A] sep (\(s : B) -> bind[A, A] p (\(y : A) -> result[A] y));
+    bind[A, PList[A]] p (\(x : A) ->
+    bind[PList[A], PList[A]] (many[A] (rep[A, B] p)) (\(xs : PList[A]) ->
+    result[PList[A]] (Cons[A] x xs)))
+};
+
+let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
+    plus[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
+
+
+-- Test helper functions
 
 let error (msg : String) = {
     java.lang.System.err.println(msg);
@@ -171,14 +209,14 @@ let assert (b : Bool) =
     else
         error "assert failed!";
 
-let rec listEqual [A] (a : PolyList[A]) (b : PolyList[A]) : Bool =
+let rec listEqual [A] (a : PList[A]) (b : PList[A]) : Bool =
     case a of
         Nil         -> { case b of Nil -> True | Cons x xs -> False }
      |  Cons x xs   -> case b of
                             Nil          -> False
                          |  Cons xb xsb  -> if x == xb then listEqual[A] xs xsb else False;
 
-let rec parseListEqual [A] (a : PolyList[(A, PolyString)]) (b : PolyList[(A, PolyString)]) : Bool =
+let rec parseListEqual [A] (a : PList[(A, PString)]) (b : PList[(A, PString)]) : Bool =
     case a of
         Nil         -> { case b of Nil -> True | Cons x xs -> False }
      |  Cons x xs   -> case b of
@@ -187,7 +225,7 @@ let rec parseListEqual [A] (a : PolyList[(A, PolyString)]) (b : PolyList[(A, Pol
                                                 parseListEqual[A] xs xsb
                                             else False;
 
-let rec parseStringEqual (a : PolyList[(PolyString, PolyString)]) (b : PolyList[(PolyString, PolyString)]) : Bool =
+let rec parseStringEqual (a : PList[(PString, PString)]) (b : PList[(PString, PString)]) : Bool =
     case a of
         Nil         -> { case b of Nil -> True | Cons x xs -> False }
      |  Cons x xs   -> case b of
@@ -196,27 +234,37 @@ let rec parseStringEqual (a : PolyList[(PolyString, PolyString)]) (b : PolyList[
                                                 (parseStringEqual xs xsb)
                                             else False;
 
-let rec polyStringResultToString (r : PolyList[(PolyString, PolyString)]) : String =
+let rec polyStringResultToString (r : PList[(PString, PString)]) : String =
     case r of
         Nil         -> ""
      |  Cons x xs   -> "(".concat(toString x._1).concat(", `").concat(toString x._2).concat("`), ").concat(polyStringResultToString xs);
 
-let rec charResultToString (r : PolyList[(Char, PolyString)]) : String =
+let rec charResultToString (r : PList[(Char, PString)]) : String =
     case r of
         Nil         -> ""
      |  Cons x xs   -> "(".concat(x._1.toString()).concat(", `").concat(toString x._2).concat("`), ").concat(charResultToString xs);
 
+let rec intResultToString (r : PList[(Int, PString)]) : String =
+    case r of
+        Nil         -> ""
+     |  Cons x xs   -> "(".concat(x._1.toString()).concat(", `").concat(toString x._2).concat("`), ").concat(intResultToString xs);
+
 let println (s : String) = java.lang.System.out.println(s);
 let print (s : String) = java.lang.System.out.print(s);
 
-let printStringResult (r : PolyList[(PolyString, PolyString)]) = {
+let printStringResult (r : PList[(PString, PString)]) = {
     print "[";
     print (polyStringResultToString r);
     print "]"
 };
-let printCharResult (r : PolyList[(Char, PolyString)]) = {
+let printCharResult (r : PList[(Char, PString)]) = {
     print "[";
     print (charResultToString r);
+    print "]"
+};
+let printIntResult (r : PList[(Int, PString)]) = {
+    print "[";
+    print (intResultToString r);
     print "]"
 };
 
@@ -232,28 +280,38 @@ let printCharResult (r : PolyList[(Char, PolyString)]) = {
     assert (listEqual[Char] (map[Char,Char] (\(c : Char) -> 'm') (fromString "hello")) (fromString "mmmmm"));
     println "\t...ok";
 
+    print "testing foldr: ";
+    let testlist = Cons[Int] 1 (Cons[Int] 2 (Cons[Int] 3 (Cons[Int] 4 (Cons[Int] 5 (Nil[Int])))));
+    assert ((foldr[Int,Int] (\(a : Int) (b : Int) -> a + b) 0 testlist) == 15);
+    println "\t...ok";
+
+    print "testing foldl: ";
+    let testlist = Cons[Int] 1 (Cons[Int] 2 (Cons[Int] 3 (Cons[Int] 4 (Cons[Int] 5 (Nil[Int])))));
+    assert ((foldl[Int,Int] (\(b : Int) (a : Int) -> a + b) 0 testlist) == 15);
+    println "\t...ok";
+
     println "\n------- Test Combinators -------";
 
     print "testing char 'a' (fromString \"abcd\"): ";
     assert (parseListEqual[Char]
                           (char 'a' (fromString "abcd"))
-                          (singleton[(Char, PolyString)] ('a', (fromString "bcd"))));
+                          (singleton[(Char, PString)] ('a', (fromString "bcd"))));
     println "\t...ok";
 
     print "testing upper (fromString \"ABC\"): ";
     assert (parseListEqual[Char]
                           (upper (fromString "ABC"))
-                          (singleton[(Char, PolyString)] ('A', (fromString "BC"))));
+                          (singleton[(Char, PString)] ('A', (fromString "BC"))));
     println "\t...ok";
 
     print "testing letter (fromString \"abcd\"): ";
     printCharResult (letter (fromString "abcd"));
-    assert (parseListEqual[Char] (letter (fromString "abcd")) (singleton[(Char, PolyString)] ('a', (fromString "bcd"))));
+    assert (parseListEqual[Char] (letter (fromString "abcd")) (singleton[(Char, PString)] ('a', (fromString "bcd"))));
     println "\t...ok";
 
     print "testing string (fromString \"abc\") (fromString \"abcd\"): ";
     assert (parseStringEqual (string (fromString "abc") (fromString "abcd"))
-                             (singleton[(PolyString, PolyString)] ((fromString "abc"), (fromString "d"))));
+                             (singleton[(PString, PString)] ((fromString "abc"), (fromString "d"))));
     println "\t...ok";
 
     print "testing many (char 'a') (fromString \"aaab\"): ";
@@ -268,17 +326,26 @@ let printCharResult (r : PolyList[(Char, PolyString)]) = {
 
     print "testing plus (char 'a') (char 'b') (fromString \"aaab\"): ";
     assert (parseListEqual[Char] (plus[Char] (char 'a') (char 'b') (fromString "aaab"))
-                                 (singleton[(Char, PolyString)] ('a', fromString "aab")));
+                                 (singleton[(Char, PString)] ('a', fromString "aab")));
     println "\t...ok";
 
     println "testing plus (string \"aa\") (string \"aaa\") (fromString \"aaab\"): ";
-    printStringResult (plus[PolyString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
-    assert (parseStringEqual (plus[PolyString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab")) (concat2[(PolyString, PolyString)] (singleton[(PolyString, PolyString)] (fromString "aa", fromString "ab"))
-                                               (singleton[(PolyString, PolyString)] (fromString "aaa", fromString "b"))));
+    printStringResult (plus[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
+    assert (parseStringEqual (plus[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"))
+           (concat2[(PString, PString)] (singleton[(PString, PString)] (fromString "aa", fromString "ab"))
+                                        (singleton[(PString, PString)] (fromString "aaa", fromString "b"))));
     println "\t...ok";
 
-    println "testing word (fromString \"aaabcd abcd\")";
+    println "testing word (fromString \"aaabcd abcd\"): ";
     printStringResult (word (fromString "aaabcd abcd"));
+    println "\t...ok";
+
+    println "testing nat (fromString \"12345\"): ";
+    printIntResult (nat (fromString "12345"));
+    println "\t...ok";
+
+    println "testing sepby1[PString, Char] word (char ',') (fromString \"abc,def\"): ";
+    assert (len[(PList[PString], PString)] (sepby1[PString, Char] (word) (char ',') (fromString "abc,def")) == 6);
     println "\t...ok";
 
     ()

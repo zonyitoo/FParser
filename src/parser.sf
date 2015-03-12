@@ -322,8 +322,12 @@ let xmlComment : Parser[PList[Char]] =
     bind[PString, PList[Char]]     (string (fromString "-->")) (\(cend : PString) ->
     result[PList[Char]] comment)));
 
-let xmlSpace : Parser[PList[Char]] =
-    only[PList[Char]] (many[Char] whitespace);
+let xmlSpace : Parser[Unit] =
+    only[Unit]
+        (bind[PList[Char], Unit] (many[Char] whitespace) (\(sp1 : PList[Char]) ->
+         bind[PList[Char], Unit] xmlComment              (\(cmt : PList[Char]) ->
+         bind[PList[Char], Unit] (many[Char] whitespace) (\(sp2 : PList[Char]) ->
+         result[Unit] ()))));
 
 let xmlEscapedDoubleQuote : Parser[Char] =
     bind[PString, Char] (string (fromString "\\\"")) (\(__: PString) -> result[Char] '"');
@@ -348,9 +352,9 @@ let xml_escaped_string : Parser[PString] =
 
 let xml_attr : Parser[XMLNode] =
     bind[PString, XMLNode]      word                (\(key : PString) ->
-    bind[PList[Char], XMLNode]  xmlSpace            (\(sp1 : PList[Char]) ->
+    bind[Unit, XMLNode]         xmlSpace            (\(sp1 : Unit) ->
     bind[Char, XMLNode]         (char '=')          (\(eq : Char) ->
-    bind[PList[Char], XMLNode]  xmlSpace            (\(sp2 : PList[Char]) ->
+    bind[Unit, XMLNode]         xmlSpace            (\(sp2 : Unit) ->
     bind[PString, XMLNode]      word                (\(val : PString) ->
     result[XMLNode] (XMLAttr (key, val)))))));
 

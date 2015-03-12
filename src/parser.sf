@@ -1,4 +1,9 @@
 
+-- Maybe definition
+
+data Maybe[A] = Nothing
+              | Just A;
+
 -- List definition
 
 data PList[A] = Nil
@@ -64,17 +69,15 @@ let rec len[A] (l : PList[A]) : Int =
         Nil         ->  0
      |  Cons _ xs   ->  1 + (len[A] xs);
 
--- Not ready
---let car [A] (l : PList[A]) : A =
---    case l of
---        Nil         -> error "Call `car` on a empty list"
---     |  Cons x xs   -> x;
+let first[A] (l : PList[A]) : Maybe[A] =
+    case l of
+        Nil         -> Nothing[A]
+     |  Cons x xs   -> Just[A] x;
 
--- Not ready
---let cdr [A] (l : PList[A]) : PList[A] =
---    case l of
---        Nil         -> error "Call `cdr` on a empty list"
---     |  Cons x xs   -> xs;
+let rest[A] (l : PList[A]) : Maybe[PList[A]] =
+    case l of
+        Nil         -> Nothing[PList[A]]
+     |  Cons x xs   -> Just[PList[A]] xs;
 
 -- Primitive Parsers
 
@@ -175,10 +178,9 @@ let natural : Parser[Int] = {
     bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs))
 };
 
--- Issue#109
---let int : Parser[Int] =
---    plus[Int] (bind[Char,Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> -n)))
---              natural;
+let int : Parser[Int] =
+    plus[Int] (bind[Char, Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> result[Int] (0-n))))
+              natural;
 
 -- Repetition with seperators
 
@@ -245,10 +247,18 @@ let operation = {
                     (Nil[Parser[Int -> Int -> Int]]))))
 };
 
+-- Will throw null pointer exception
+--let rec expr : Parser[Int] =
+--    chainl1[Int] factor operation
+--and factor : Parser[Int] =
+--    plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
+
+-- Workaround in Issue#110
+-- Unbelievable solution!!!!
 let rec expr : Parser[Int] =
-    chainl1[Int] factor operation
+    \(s : PString) -> chainl1[Int] factor operation s
 and factor : Parser[Int] =
-    plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
+    \(s : PString) -> plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')')) s;
 
 -- Test helper functions
 
@@ -316,6 +326,18 @@ let printIntResult (r : PList[(Int, PString)]) = {
     print (intResultToString r);
     print "]"
 };
+let printFirstIntResult (r : PList[(Int, PString)]) =
+    case first[(Int, PString)] r of
+        Nothing        -> print "Nothing in the List!!!"
+     |  Just x        -> print "(".concat(x._1.toString()).concat(", \"").concat(toString x._2).concat("\")");
+let printFirstCharResult (r : PList[(Char, PString)]) =
+    case first[(Char, PString)] r of
+        Nothing        -> print "Nothing in the List!!!"
+     |  Just x        -> print "(".concat(x._1.toString()).concat(", \"").concat(toString x._2).concat("\")");
+let printFirstStringResult (r : PList[(PString, PString)]) =
+    case first[(PString, PString)] r of
+        Nothing        -> print "Nothing in the List!!!"
+     |  Just x        -> print "(".concat(toString x._1).concat(", \"").concat(toString x._2).concat("\")");
 
 
 {
@@ -397,9 +419,32 @@ let printIntResult (r : PList[(Int, PString)]) = {
     assert (len[(PList[PString], PString)] (sepby1[PString, Char] (word) (char ',') (fromString "abc,def")) == 6);
     println "\t...ok";
 
+
+    println "\n---------- Test Simple Arithmetic Expression Parser ------------";
+
     println "testing expr (fromString \"123\"): ";
-    printIntResult (expr (fromString "123"));
+    printFirstIntResult (expr (fromString "123"));
     println "\t...ok";
 
-    ()
+    println "testing expr (fromString \"(123)\"): ";
+    printFirstIntResult (expr (fromString "(123)"));
+    println "\t...ok";
+
+    println "testing expr (fromString \"1+2\"): ";
+    printFirstIntResult (expr (fromString "1+2"));
+    println "\t...ok";
+
+    println "testing expr (fromString \"10+2\"): ";
+    printFirstIntResult (expr (fromString "10+2"));
+    println "\t...ok";
+
+    println "testing expr (fromString \"(10+2)*2\"): ";
+    printFirstIntResult (expr (fromString "(10+2)*2"));
+    println "\t...ok";
+
+    println "testing expr (fromString \"(10+2)*2/6\"): ";
+    printFirstIntResult (expr (fromString "(10+2)*2/6"));
+    println "\t...ok";
+
+    "\n-- END --"
 }

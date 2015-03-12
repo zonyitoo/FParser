@@ -4,6 +4,9 @@
 data Maybe[A] = Nothing
               | Just A;
 
+-- State definition
+type State[S, A] = S -> (A, S);
+
 -- List definition
 
 data PList[A] = Nil
@@ -24,17 +27,16 @@ let rec toString (l : PString) : String =
         Nil         -> ""
      |  Cons x xs   -> x.toString().concat(toString xs);
 
+let rec charin (c : Char) (str : PString) : Bool =
+    case str of
+        Nil         ->      False
+     |  Cons x xs   ->      if x == c then True else (charin c xs);
+
 -- Parser type definition
 
 type Parser[A] = PString -> PList[(A, PString)];
 
 -- Utilities
-
-let error (msg : String) = {
-    java.lang.System.err.println(msg);
-    java.lang.System.exit(1);
-    ()
-};
 
 let singleton[A] (x : A) : PList[A] =
     Cons[A] x (Nil[A]);
@@ -79,6 +81,14 @@ let rest[A] (l : PList[A]) : Maybe[PList[A]] =
         Nil         -> Nothing[PList[A]]
      |  Cons x xs   -> Just[PList[A]] xs;
 
+let rec take[A] (n : Int) (l : PList[A]) : PList[A] =
+    if n <= 0 then
+        (Nil[A])
+    else
+        case l of
+            Nil         -> (Nil[A])
+         |  Cons x xs   -> (Cons[A] x (take[A] (n-1) xs));
+
 -- Primitive Parsers
 
 let result[V] (value : V) : Parser[V] =
@@ -109,7 +119,7 @@ let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
     bind[B, (A, B)] q (\(y : B) ->
     result[(A, B)] (x, y)));
 
-let plus[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+let choice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     \(inp : PString) ->
         concat2[(A, PString)] (p inp) (q inp);
 
@@ -118,6 +128,9 @@ let sat (f : Char -> Bool) : Parser[Char] =
 
 let char (x : Char) : Parser[Char] =
     sat (\(y : Char) -> x == y);
+
+let notchar (x : Char) : Parser[Char] =
+    sat (\(y : Char) -> x != y);
 
 let digit : Parser[Char] =
     sat (\(x : Char) -> java.lang.Character.isDigit(x));
@@ -135,10 +148,14 @@ let whitespace : Parser[Char] =
     sat (\(x : Char) -> java.lang.Character.isWhitespace(x));
 
 let letter : Parser[Char] =
-    plus[Char] lower upper;
+    choice[Char] lower upper;
 
 let alphanum : Parser[Char] =
-    plus[Char] letter digit;
+    choice[Char] letter digit;
+
+-- Issue#116
+--let noneof (s : PString) : Parser[Char] =
+--    sat (\(x : Char) -> !(charin x s));
 
 let rec string (s : PString) : Parser[PString] =
     case s of
@@ -151,7 +168,7 @@ let rec string (s : PString) : Parser[PString] =
 -- Repetition
 
 let rec many[A] (p : Parser[A]) : Parser[PList[A]] =
-    plus[PList[A]] (bind[A, PList[A]] p (\(x : A) ->
+    choice[PList[A]] (bind[A, PList[A]] p (\(x : A) ->
                     bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
                     result[PList[A]] (Cons[A] x xs))))
                    (result[PList[A]] (Nil[A]));
@@ -179,7 +196,7 @@ let natural : Parser[Int] = {
 };
 
 let int : Parser[Int] =
-    plus[Int] (bind[Char, Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> result[Int] (0-n))))
+    choice[Int] (bind[Char, Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> result[Int] (0-n))))
               natural;
 
 -- Repetition with seperators
@@ -193,7 +210,7 @@ let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] = {
 };
 
 let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
-    plus[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
+    choice[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
 
 
 -- More complicated
@@ -210,6 +227,37 @@ let chainl1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] = {
     result[A] (foldl[(A -> A -> A, A), A] (\(x : A) (fy : (A -> A -> A, A)) -> fy._1 x fy._2) x fys)))
 };
 
+-- associate to the right
+let rec chainr1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] =
+    bind[A, A] p (\(x : A) ->
+        choice[A] (bind[A -> A -> A, A] op (\(f : A -> A -> A) ->
+                 bind[A, A] (chainr1[A] p op) (\(y : A) -> -- Calculate the result on the right
+                 result[A] (f x y))))
+                (result[A] x));
+
+let chainl[A] (p : Parser[A]) (op : Parser[A -> A -> A]) (v : A) : Parser[A] =
+    choice[A] (chainl1[A] p op) (result[A] v);
+
+let chainr[A] (p : Parser[A]) (op : Parser[A -> A -> A]) (v : A) : Parser[A] =
+    choice[A] (chainr1[A] p op) (result[A] v);
+
+
+-- Improved Laziness (Haven't supported in F2J yet)
+
+-- Pick the first (if exists) result
+--let only[A] (p : Parser[A]) : Parser[A] =
+--    \(inp : PString) ->
+--        case (p inp) of
+--            Nil         -> (Nil[(A, PString)])
+--         |  Cons x xs   -> (singleton[(A, PString)] x);
+
+-- If doesn't care about lazy evaluation, then this version is fancy
+let only[A] (p : Parser[A]) : Parser[A] =
+    \(inp : PString) -> take[(A, PString)] 1 (p inp);
+
+-- Lazy choice
+let lazychoice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    only[A] (choice[A] p q);
 
 -- Simple arithmetic expression
 -- FIXME: Issue110
@@ -226,17 +274,17 @@ let operation = {
     let mulop (a : Int) (b : Int) : Int = a * b;
     let divop (a : Int) (b : Int) : Int = a / b;
 
---    let add_sub = plus[Int -> Int -> Int]
+--    let add_sub = choice[Int -> Int -> Int]
 --        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
 --        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
---    let mul_div = plus[Int -> Int -> Int]
+--    let mul_div = choice[Int -> Int -> Int]
 --        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
 --        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
 
---    plus[Int -> Int -> Int] add_sub mul_div
+--    choice[Int -> Int -> Int] add_sub mul_div
 
     -- Fancy style
-    foldr[Parser[Int -> Int -> Int], Parser[Int -> Int -> Int]] (plus[Int -> Int -> Int])
+    foldr[Parser[Int -> Int -> Int], Parser[Int -> Int -> Int]] (choice[Int -> Int -> Int])
         (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
         (Cons[Parser[Int -> Int -> Int]]
             (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop))
@@ -251,16 +299,69 @@ let operation = {
 --let rec expr : Parser[Int] =
 --    chainl1[Int] factor operation
 --and factor : Parser[Int] =
---    plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
+--    choice[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
 
 -- Workaround in Issue#110
 -- Unbelievable solution!!!!
 let rec expr : Parser[Int] =
     \(s : PString) -> chainl1[Int] factor operation s
 and factor : Parser[Int] =
-    \(s : PString) -> plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')')) s;
+    \(s : PString) -> choice[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')')) s;
+
+-- Naive XML Parser
+data XMLNode = XMLText      PString
+             | XMLComment   PString
+             | XMLAttr      (PString, PString)
+             | XMLTag       PString
+             --| XMLElement   XMLTag      XMLAttr     XMLNode
+             ;
+
+let xmlComment : Parser[PList[Char]] =
+    bind[PString, PList[Char]]     (string (fromString "<!--")) (\(cstart : PString) ->
+    bind[PList[Char], PList[Char]] (many[Char] item) (\(comment : PList[Char]) ->
+    bind[PString, PList[Char]]     (string (fromString "-->")) (\(cend : PString) ->
+    result[PList[Char]] comment)));
+
+let xmlSpace : Parser[PList[Char]] =
+    only[PList[Char]] (many[Char] whitespace);
+
+let xmlEscapedDoubleQuote : Parser[Char] =
+    bind[PString, Char] (string (fromString "\\\"")) (\(__: PString) -> result[Char] '"');
+
+let xmlEscapedSingleQuote : Parser[Char] =
+    bind[PString, Char] (string (fromString "\\'")) (\(__: PString) -> result[Char] '\'');
+
+let xmlDoubleQuotedString : Parser[PString] =
+    bind[Char, PString]       (char '"')                                                        (\(sstart : Char) ->
+    bind[PString, PString]    (many[Char] (choice[Char] xmlEscapedDoubleQuote (notchar '"')))   (\(content: PString) ->
+    bind[Char, PString]       (char '"')                                                        (\(send : Char) ->
+    result[PString] content)));
+
+let xmlSingleQuotedString : Parser[PString] =
+    bind[Char, PString]       (char '\'')                                                       (\(sstart : Char) ->
+    bind[PString, PString]    (many[Char] (choice[Char] xmlEscapedSingleQuote (notchar '\'')))  (\(content: PString) ->
+    bind[Char, PString]       (char '\'')                                                       (\(send : Char) ->
+    result[PString] content)));
+
+let xml_escaped_string : Parser[PString] =
+    choice[PString] xmlDoubleQuotedString xmlSingleQuotedString;
+
+let xml_attr : Parser[XMLNode] =
+    bind[PString, XMLNode]      word                (\(key : PString) ->
+    bind[PList[Char], XMLNode]  xmlSpace            (\(sp1 : PList[Char]) ->
+    bind[Char, XMLNode]         (char '=')          (\(eq : Char) ->
+    bind[PList[Char], XMLNode]  xmlSpace            (\(sp2 : PList[Char]) ->
+    bind[PString, XMLNode]      word                (\(val : PString) ->
+    result[XMLNode] (XMLAttr (key, val)))))));
+
 
 -- Test helper functions
+
+let error (msg : String) = {
+    java.lang.System.err.println(msg);
+    java.lang.System.exit(1);
+    ()
+};
 
 let assert (b : Bool) =
     if b then
@@ -395,14 +496,14 @@ let printFirstStringResult (r : PList[(PString, PString)]) =
     printStringResult (many1[Char] (char 'a') (fromString "aaab"));
     println "\t...ok";
 
-    print "testing plus (char 'a') (char 'b') (fromString \"aaab\"): ";
-    assert (parseListEqual[Char] (plus[Char] (char 'a') (char 'b') (fromString "aaab"))
+    print "testing choice (char 'a') (char 'b') (fromString \"aaab\"): ";
+    assert (parseListEqual[Char] (choice[Char] (char 'a') (char 'b') (fromString "aaab"))
                                  (singleton[(Char, PString)] ('a', fromString "aab")));
     println "\t...ok";
 
-    println "testing plus (string \"aa\") (string \"aaa\") (fromString \"aaab\"): ";
-    printStringResult (plus[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
-    assert (parseStringEqual (plus[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"))
+    println "testing choice (string \"aa\") (string \"aaa\") (fromString \"aaab\"): ";
+    printStringResult (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
+    assert (parseStringEqual (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"))
            (concat2[(PString, PString)] (singleton[(PString, PString)] (fromString "aa", fromString "ab"))
                                         (singleton[(PString, PString)] (fromString "aaa", fromString "b"))));
     println "\t...ok";
@@ -444,6 +545,21 @@ let printFirstStringResult (r : PList[(PString, PString)]) =
 
     println "testing expr (fromString \"(10+2)*2/6\"): ";
     printFirstIntResult (expr (fromString "(10+2)*2/6"));
+    println "\t...ok";
+
+
+    println "\n ---------- Test Naive XML Parser ------------";
+
+    println "testing xmlComment (fromString \"<!-- hahaa? -->\"): ";
+    printFirstStringResult (xmlComment (fromString "<!-- hahaa? -->"));
+    println "\t...ok";
+
+    println "testing xmlDoubleQuotedString (fromString \"\\\"abc\\\"def\"\\\"): ";
+    printFirstStringResult (xmlDoubleQuotedString (fromString "\"abc\\\"def\""));
+    println "\t...ok";
+
+    println "testing xmlSingleQuotedString (fromString \"'abc\\'def'\"\"): ";
+    printFirstStringResult (xmlSingleQuotedString (fromString "'abc\\'def\"'"));
     println "\t...ok";
 
     "\n-- END --"

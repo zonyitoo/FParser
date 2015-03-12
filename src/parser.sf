@@ -104,7 +104,7 @@ let bind[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
 let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
     bind[A, (A, B)] p (\(x : A) ->
     bind[B, (A, B)] q (\(y : B) ->
-    result [(A, B)] (x, y)));
+    result[(A, B)] (x, y)));
 
 let plus[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     \(inp : PString) ->
@@ -141,10 +141,9 @@ let rec string (s : PString) : Parser[PString] =
     case s of
         Nil         ->  result (Nil[Char])
      |  Cons x xs   ->
-            bind[Char, PString] (char x) (\(dummy1 : Char) ->
+            bind[Char, PString]    (char x)    (\(dummy1 : Char) ->
             bind[PString, PString] (string xs) (\(dummy2 : PString) ->
-            result (Cons[Char] x xs)));
-
+            result[PString] (Cons[Char] x xs)));
 
 -- Repetition
 
@@ -195,6 +194,21 @@ let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
     plus[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
 
 
+-- More complicated
+
+-- Parses non-empty sequences of items seperated by operators that associate to the left
+let chainl1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] = {
+    let fy =
+        bind[A -> A -> A, (A -> A -> A, A)] op (\(f : A -> A -> A) ->
+        bind[A, (A -> A -> A, A)]           p  (\(y : A) ->
+        result[(A -> A -> A, A)] (f, y)));
+
+    bind[A, A]                           p                            (\(x : A) ->
+    bind[PList[(A -> A -> A, A)], A]     (many[(A -> A -> A, A)] fy)  (\(fys: PList[(A -> A -> A, A)]) ->
+    result[A] (foldl[(A -> A -> A, A), A] (\(x : A) (fy : (A -> A -> A, A)) -> fy._1 x fy._2) x fys)))
+};
+
+
 -- Simple arithmetic expression
 -- FIXME: Issue110
 
@@ -210,32 +224,33 @@ let operation = {
     let mulop (a : Int) (b : Int) : Int = a * b;
     let divop (a : Int) (b : Int) : Int = a / b;
 
-    let add_sub = plus[Int -> Int -> Int]
-        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
-        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
-    let mul_div = plus[Int -> Int -> Int]
-        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
-        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
+--    let add_sub = plus[Int -> Int -> Int]
+--        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
+--        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
+--    let mul_div = plus[Int -> Int -> Int]
+--        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
+--        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
 
-    plus[Int -> Int -> Int] add_sub mul_div
+--    plus[Int -> Int -> Int] add_sub mul_div
+
+    -- Fancy style
+    foldr[Parser[Int -> Int -> Int], Parser[Int -> Int -> Int]] (plus[Int -> Int -> Int])
+        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
+        (Cons[Parser[Int -> Int -> Int]]
+            (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop))
+            (Cons[Parser[Int -> Int -> Int]]
+                (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
+                (Cons[Parser[Int -> Int -> Int]]
+                    (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop))
+                    (Nil[Parser[Int -> Int -> Int]]))))
 };
 
 let rec expr : Parser[Int] =
-    bind[Int, Int] expr (\(x : Int) ->
-    bind[Int -> Int -> Int, Int] operation (\(f : Int -> Int -> Int) ->
-    bind[Int, Int] factor (\(y : Int) ->
-    result[Int] (f x y))))
-and
-    factor : Parser[Int] =
-        plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
+    chainl1[Int] factor operation
+and factor : Parser[Int] =
+    plus[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
 
 -- Test helper functions
-
-let error (msg : String) = {
-    java.lang.System.err.println(msg);
-    java.lang.System.exit(1);
-    ()
-};
 
 let assert (b : Bool) =
     if b then

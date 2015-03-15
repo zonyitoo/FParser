@@ -187,7 +187,6 @@ let letter : Parser[Char] =
 let alphanum : Parser[Char] =
     choice[Char] letter digit;
 
--- Issue#116
 let noneof (s : PString) : Parser[Char] =
     sat (\(x : Char) -> (charin x s) == False);
 
@@ -318,14 +317,23 @@ let operation = {
     let mulop (a : Int) (b : Int) : Int = a * b;
     let divop (a : Int) (b : Int) : Int = a / b;
 
-    let add_sub = choice[Int -> Int -> Int]
-        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
-        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
-    let mul_div = choice[Int -> Int -> Int]
-        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
-        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
+--    let add_sub = choice[Int -> Int -> Int]
+--        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
+--        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
+--    let mul_div = choice[Int -> Int -> Int]
+--        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
+--        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
+--
+--    choice[Int -> Int -> Int] add_sub mul_div
 
-    choice[Int -> Int -> Int] add_sub mul_div
+    let add = bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop);
+    let sub = bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop);
+    let mul = bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop);
+    let div = bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop);
+
+    let choiceOp = choice[Int -> Int -> Int];
+
+    add `choiceOp` sub `choiceOp` mul `choiceOp` div
 
     -- Fancy style
 --    foldr[Parser[Int -> Int -> Int], Parser[Int -> Int -> Int]] (choice[Int -> Int -> Int])
@@ -403,15 +411,17 @@ let xmlEscapedChar : Parser[Char] = {
     let gt = bind[PString, Char] (string (fromString "&gt;")) (\(__ : PString) -> result[Char] '>');
     let amp = bind[PString, Char] (string (fromString "&amp;")) (\(__ : PString) -> result[Char] '&');
 
-    choice[Char]
-        quot
-        (choice[Char]
-            apos
-            (choice[Char]
-                lt
-                (choice[Char]
-                    gt
-                    amp)))
+--    choice[Char]
+--        quot
+--        (choice[Char]
+--            apos
+--            (choice[Char]
+--                lt
+--                (choice[Char]
+--                    gt
+--                    amp)))
+    let choiceChar = choice[Char];
+    quot `choiceChar` apos `choiceChar` lt `choiceChar` gt `choiceChar` amp
 };
 
 let xmlChar : Parser[Char] =
@@ -470,15 +480,26 @@ and xmlSimpleElement : Parser[XMLNode] =
     bind[Unit, XMLNode]             (xmlEndTag tag)                             (\(__ : Unit) ->
     result[XMLNode] (XMLElement tag (Nil[XMLNode]) (Nil[XMLNode])))))))))
 
+and xmlSimpleElementWithAttrs : Parser[XMLNode] =
+    bind[Char, XMLNode]             (char '<')                                  (\(__ : Char) ->
+    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
+    bind[PString, XMLNode]          xmlKey                                      (\(tag : PString) ->
+    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
+    bind[PList[XMLNode], XMLNode]   xmlAttrs                                    (\(attrs: PList[XMLNode]) ->
+    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
+    bind[Char, XMLNode]             (char '>')                                  (\(__ : Char) ->
+    bind[Unit, XMLNode]             (xmlEndTag tag)                             (\(__ : Unit) ->
+    result[XMLNode] (XMLElement tag attrs (Nil[XMLNode]))))))))))
+
 and xmlElement : Parser[XMLNode] =
     bind[Char, XMLNode]             (char '<')                                  (\(__ : Char) ->
     bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
     bind[PString, XMLNode]          xmlKey                                      (\(tag : PString) ->
     bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
-    bind[PList[XMLNode], XMLNode]   (sepby[XMLNode, Unit] xmlAttr xmlSpace)     (\(attrs: PList[XMLNode]) ->
+    bind[PList[XMLNode], XMLNode]   xmlAttrs                                    (\(attrs: PList[XMLNode]) ->
     bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
     bind[Char, XMLNode]             (char '>')                                  (\(__ : Char) ->
-    bind[PList[XMLNode], XMLNode]   (many1[XMLNode] xmlNode)                    (\(ch : PList[XMLNode]) ->
+    bind[PList[XMLNode], XMLNode]   (many[XMLNode] xmlNode)                     (\(ch : PList[XMLNode]) ->
     bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
     bind[Unit, XMLNode]             (xmlEndTag tag)                             (\(__ : Unit) ->
     result[XMLNode] (XMLElement tag attrs ch)))))))))))
@@ -723,14 +744,33 @@ let printFirstXMLResult (r : PList[(XMLNode, PString)]) =
     printFirstXMLResult (xmlAttr (fromString "key = \"vvvalue\""));
     println "\t...ok";
 
+    println "testing xmlAttrs (fromString \"key = \\\"vvvalue\\\" hello = \\\"world\\\" haha='what?'\"): ";
+    case first[(PList[XMLNode], PString)]
+            (xmlAttrs (fromString "key = \"vvvalue\" hello = \"world\" haha='what?'")) of
+        Nothing   ->  print "Noting in the List"
+     |  Just x    ->  print "(".concat(listToString[XMLNode] x._1 xmlNodeToString)
+                               .concat(", \"")
+                               .concat(toString x._2)
+                               .concat("\")");
+    println "\t...ok";
+
     println "testing xmlSimpleElement (fromString \"<a></a>\"): ";
     printFirstXMLResult (xmlSimpleElement (fromString "<a></a>"));
     println "\t..ok";
 
+    println "testing xmlSimpleElement (fromString \"<abcdefg></abcdefg>\"): ";
+    printFirstXMLResult (xmlSimpleElement (fromString "<abcdefg></abcdefg>"));
+    println "\t..ok";
+
+    println "testing xmlSimpleElementWithAttrs (fromString \"<a href='/login' class='button'></a>\"): ";
+    printFirstXMLResult (xmlSimpleElementWithAttrs (fromString "<a href='/login' class='button'></a>"));
+    println "\t..ok";
+
     -- FIXME: Stack Overflow
-    --println "testing xmlElement (fromString \"<a></a>\"): ";
+    println "testing xmlElement (fromString \"<a></a>\"): ";
     --printFirstXMLResult (xmlElement (fromString "<a></a>"));
-    --println "\t...ok";
+    --xmlElement (fromString "<a></a>");
+    println "\t...ok";
 
     "\n-- END --"
 }

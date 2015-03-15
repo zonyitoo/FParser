@@ -822,7 +822,7 @@ let (<++>) (a : String) (b : String) : String =
     println "\t...ok";
 
     println (testingPrefix <++> "xmlElement (fromString \"<a href='/toosimple/sometimes/naive'>ha?haha!</a>\"): ");
-    printFirstXMLResult (xmlElement (fromString "<a>ha?haha!</a>"));
+    printFirstXMLResult (xmlElement (fromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"));
     println "\t...ok";
 
     "\n-- END --"

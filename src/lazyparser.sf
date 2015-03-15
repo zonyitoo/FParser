@@ -60,10 +60,16 @@ let join[A] (l : PList[A]) (j : A) : PList[A] = {
      |  Cons x xs   -> (Cons[A] x (\(__ : Unit) -> inner[A] (eval[PList[A]] xs) j))
 };
 
+--let (:)[A] (a : A) (b : PList[A]) : PList[A] =
+--    Cons[A] a (\(__ : Unit) -> b);
+
 let rec concat2[A] (a : PList[A]) (b : PList[A]) : PList[A] =
     case a of
         Nil         ->  b
       | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (concat2[A] (eval[PList[A]] xs) b));
+
+let (@)[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+    concat2[A] a b;
 
 let rec concat[A] (l : PList[PList[A]]) : PList[A] =
     case l of
@@ -148,6 +154,18 @@ let bind[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
               (map[(A, PString), PList[(B, PString)]]
                   (\(v : (A, PString)) -> f v._1 v._2) (p inp));
 
+let (>>=)[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
+    bind[A, B] p f;
+
+let (>>)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[B] =
+    p >>=[A, B] (\(__ : A) -> q);
+
+let using[A, B] (p : Parser[A]) (f : A -> B) : Parser[B] =
+    bind[A, B] p (\(a : A) -> result[B] (f a));
+
+--let <$>[A, B] (p : Parser[A]) (f : A -> B) : Parser[A] =
+--    using[A, B] p f;
+
 let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
     bind[A, (A, B)] p (\(x : A) ->
     bind[B, (A, B)] q (\(y : B) ->
@@ -156,6 +174,12 @@ let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
 let choice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     \(inp : PString) ->
         concat2[(A, PString)] (p inp) (q inp);
+
+--let <|>[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+--    choice[A] p q;
+
+let (++)[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    choice[A] p q;
 
 let sat (f : Char -> Bool) : Parser[Char] =
     bind[Char, Char] item (\(x : Char) -> if f x then (result[Char] x) else zero[Char]);
@@ -239,7 +263,8 @@ let natural : Parser[Int] = {
 };
 
 let int : Parser[Int] =
-    choice[Int] (bind[Char, Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> result[Int] (0-n))))
+    choice[Int] ((char '-') >>[Char, Int]
+                 (using[Int,Int] natural (\(n : Int) -> (-n))))
               natural;
 
 -- Repetition with seperators
@@ -305,11 +330,14 @@ let lazychoice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
 -- Simple arithmetic expression
 -- FIXME: Issue110
 
+--let bracket[A, B, C] (open : Parser[A]) (p : Parser[B]) (close : Parser[C]) : Parser[B] =
+--    bind[A, B] open   (\(o : A) ->
+--    bind[B, B] p      (\(x : B) ->
+--    bind[C, B] close  (\(c : C) ->
+--    result[B] x)));
+
 let bracket[A, B, C] (open : Parser[A]) (p : Parser[B]) (close : Parser[C]) : Parser[B] =
-    bind[A, B] open   (\(o : A) ->
-    bind[B, B] p      (\(x : B) ->
-    bind[C, B] close  (\(c : C) ->
-    result[B] x)));
+    open >>[A, B] p >>=[B, B] (\(x : B) -> close >>[C, B] (result[B] x));
 
 let operation = {
     let addop (a : Int) (b : Int) : Int = a + b;
@@ -326,14 +354,16 @@ let operation = {
 --
 --    choice[Int -> Int -> Int] add_sub mul_div
 
-    let add = bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop);
-    let sub = bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop);
-    let mul = bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop);
-    let div = bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop);
+--    let add = bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop);
+    let add = (char '+') >>[Char, Int -> Int -> Int] (result[Int -> Int -> Int] addop);
+--    let sub = bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop);
+    let sub = (char '-') >>[Char, Int -> Int -> Int] (result[Int -> Int -> Int] subop);
+--    let mul = bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop);
+    let mul = (char '*') >>[Char, Int -> Int -> Int] (result[Int -> Int -> Int] mulop);
+--    let div = bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop);
+    let div = (char '/') >>[Char, Int -> Int -> Int] (result[Int -> Int -> Int] divop);
 
-    let choiceOp = choice[Int -> Int -> Int];
-
-    add `choiceOp` sub `choiceOp` mul `choiceOp` div
+    add `choice[Int -> Int -> Int]` sub `choice[Int -> Int -> Int]` mul `choice[Int -> Int -> Int]` div
 
     -- Fancy style
 --    foldr[Parser[Int -> Int -> Int], Parser[Int -> Int -> Int]] (choice[Int -> Int -> Int])
@@ -420,8 +450,7 @@ let xmlEscapedChar : Parser[Char] = {
 --                (choice[Char]
 --                    gt
 --                    amp)))
-    let choiceChar = choice[Char];
-    quot `choiceChar` apos `choiceChar` lt `choiceChar` gt `choiceChar` amp
+    quot `choice[Char]` apos `choice[Char]` lt `choice[Char]` gt `choice[Char]` amp
 };
 
 let xmlChar : Parser[Char] =
@@ -499,13 +528,17 @@ and xmlElement : Parser[XMLNode] =
     bind[PList[XMLNode], XMLNode]   xmlAttrs                                    (\(attrs: PList[XMLNode]) ->
     bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
     bind[Char, XMLNode]             (char '>')                                  (\(__ : Char) ->
-    bind[PList[XMLNode], XMLNode]   (many[XMLNode] xmlNode)                     (\(ch : PList[XMLNode]) ->
+    bind[PList[XMLNode], XMLNode]   xmlElementChildren                          (\(ch : PList[XMLNode]) ->
     bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
     bind[Unit, XMLNode]             (xmlEndTag tag)                             (\(__ : Unit) ->
     result[XMLNode] (XMLElement tag attrs ch)))))))))))
 
+and xmlElementChildren : Parser[PList[XMLNode]] =
+    choice[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
+                           (many1[XMLNode] xmlElement)
+
 and xmlNode : Parser[XMLNode] =
-    choice[XMLNode] xmlText xmlElement;
+    xmlElement;
 
 
 -- Test helper functions
@@ -740,6 +773,14 @@ let printFirstXMLResult (r : PList[(XMLNode, PString)]) =
     printFirstXMLResult (xmlText (fromString "abcdefg&lt;hijk"));
     println "\t...ok";
 
+    println "testing xmlText (fromString \"\"): ";
+    printFirstXMLResult (xmlText (fromString ""));
+    println "\t...ok";
+
+    println "testing xmlNode (fromString \"\"): ";
+    printFirstXMLResult (xmlText (fromString ""));
+    println "\t...ok";
+
     println "testing xmlAttr (fromString \"key = \"vvvalue\"\"): ";
     printFirstXMLResult (xmlAttr (fromString "key = \"vvvalue\""));
     println "\t...ok";
@@ -766,10 +807,8 @@ let printFirstXMLResult (r : PList[(XMLNode, PString)]) =
     printFirstXMLResult (xmlSimpleElementWithAttrs (fromString "<a href='/login' class='button'></a>"));
     println "\t..ok";
 
-    -- FIXME: Stack Overflow
     println "testing xmlElement (fromString \"<a></a>\"): ";
-    --printFirstXMLResult (xmlElement (fromString "<a></a>"));
-    --xmlElement (fromString "<a></a>");
+    printFirstXMLResult (xmlElement (fromString "<a></a>"));
     println "\t...ok";
 
     "\n-- END --"

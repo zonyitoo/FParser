@@ -2,7 +2,15 @@
 
 A monadic parser combinators library implementation in [F2J](https://github.com/hkuplg/fcore).
 
-## Run Tests
+## Usage
+
+* Build
+
+```bash
+$ make
+```
+
+* Run tests
 
 ```bash
 $ make test
@@ -10,20 +18,20 @@ $ make test
 
 ## Goals
 
-* [+] Simple parser combinators
+* `[+]` Simple parser combinators
 
-* [+] Simple arithmetic expression parser
+* `[+]` Simple arithmetic expression parser
 
-* [+] Lazy evaluated list
+* `[+]` Lazy evaluated list
 
-* [+] Simple XML parser
+* `[+]` Simple XML parser
 
-* [+] Simple test framework
+* `[+]` Simple test framework
 
-* [-] Simple F2J parser
+* `[-]` Simple F2J parser
 
-* [-] Seperate in modules
+* `[-]` Seperate in modules
 
-* [-] Simple Scheme parser
+* `[-]` Simple Scheme parser
 
-* [-] Improve efficiency
+* `[-]` Improve efficiency

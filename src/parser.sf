@@ -270,12 +270,12 @@ let ident : Parser[PString] =
     result[PString] (Cons[Char] x (\(__ : Unit) -> xs))));
 
 let natural : Parser[Int] = {
-    let invokeuate (xs : PList[Char]) =
+    let eval (xs : PList[Char]) =
         foldl[Int, Int] (\(b : Int) (a : Int) -> 10 * b + a)
                         0
                         (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 10)) xs);
 
-    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (invokeuate xs))
+    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs))
 };
 
 let int : Parser[Int] =

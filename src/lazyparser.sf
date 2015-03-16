@@ -116,6 +116,17 @@ let listToString[A] (l : PList[A]) (tostr : A -> String) : String =
                                        (join[String] (map[A, String] tostr l) ", ");
      "[".concat(inner).concat("]"));
 
+--let listToString[A] (l : PList[A]) (tostr : A -> String) : String = {
+--    type StringBuffer = java.lang.StringBuffer;
+--
+--    let inner = foldl[String, StringBuffer]
+--                    (\(b : StringBuffer) (a : String) -> b.append(a))
+--                    (new java.lang.StringBuffer("["))
+--                    (join[String] (map[A, String] tostr l) ", ");
+--
+--    inner.append("]").toString()
+--};
+
 -- ADT String
 
 type PString = PList[Char];
@@ -875,6 +886,24 @@ let testElementSimpleEndTag : TestFn = {
         printFirstXMLResult (xmlElement (fromString "<a/>"))
 };
 
+let testElementSimpleEndTag2 : TestFn = {
+    name = "xmlElement (fromString \"<you young='too' simple='too'><naive><required/></naive></you>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement
+                (fromString
+                    "<you young='too' simple='too'><naive><required/></naive></you>"))
+};
+
+let testElementSimpleEndTag3 : TestFn = {
+    name = "xmlElement (fromString \"<you young='too' simple='too'>\\n\\t<naive>\\n\\t\\t<required/>\\n\\t</naive>\\n</you>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement
+                (fromString
+                    "<you young='too' simple='too'>\n\t<naive>\n\t\t<required/>\n\t</naive>\n</you>"))
+};
+
 let testNaiveXMLParserSuite : TestSuite = {
     name = "Test Naive XML Parser",
     fns  = testXMLComment
@@ -892,7 +921,9 @@ let testNaiveXMLParserSuite : TestSuite = {
                 +>[TestFn] (testElementWithAttrWithChildren
                 +>[TestFn] (testElementSimple2
                 +>[TestFn] (testElementSimpleEndTag
-                +>[TestFn] (Nil[TestFn])))))))))))))))
+                +>[TestFn] (testElementSimpleEndTag2
+                +>[TestFn] (testElementSimpleEndTag3
+                +>[TestFn] (Nil[TestFn])))))))))))))))))
 };
 
 let parserTestSuites : PList[TestSuite] =

@@ -1,75 +1,91 @@
 
+-- Definition of Thunk
+type Thunk[A] = Unit -> A;
+
+let invoke[A] (t : Thunk[A]) : A =
+    t ();
+
 -- Maybe definition
 
 data Maybe[A] = Nothing
-              | Just A;
+              | Just A
+              ;
+
+-- Result definition
+data Result[S, E] = Ok S
+                  | Err E
+                  ;
 
 -- State definition
 type State[S, A] = S -> (A, S);
 
--- List definition
-
+-- ADT List
 data PList[A] = Nil
-              | Cons A (PList[A]);
+              | Cons A (Thunk[PList[A]])
+              ;
 
--- String definition
-
-type PString = PList[Char];
-
-let rec fromString (str : String) : PString =
-    if length(str) == 0 then
-        (Nil[Char])
-    else
-        (Cons[Char] str.charAt(0) (fromString str.substring(1)));
-
-let rec toString (l : PString) : String =
-    case l of
-        Nil         -> ""
-     |  Cons x xs   -> x.toString().concat(toString xs);
-
-let rec charin (c : Char) (str : PString) : Bool =
-    case str of
-        Nil         ->      False
-     |  Cons x xs   ->      if x == c then True else (charin c xs);
-
--- Parser type definition
-
-type Parser[A] = PString -> PList[(A, PString)];
+let rec nats (beg : Int) : PList[Int] =
+    Cons[Int] beg (\(__ : Unit) -> nats (beg+1));
 
 -- Utilities
 
 let singleton[A] (x : A) : PList[A] =
-    Cons[A] x (Nil[A]);
+    Cons[A] x (\(__: Unit) -> (Nil[A]));
 
 let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[B] =
     case l of
         Nil             ->      Nil[B]
-     |  Cons x xs       ->      Cons[B] (f x) (map[A, B] f xs);
+     |  Cons x xs       ->      Cons[B] (f x) (\(__ : Unit) -> (map[A, B] f (invoke[PList[A]] xs)));
 
 let rec foldl[A, B] (f : B -> A -> B) (z : B) (l : PList[A]) : B =
     case l of
         Nil             ->      z
-     |  Cons x xs       ->      foldl[A, B] f (f z x) xs;
+     |  Cons x xs       ->      foldl[A, B] f (f z x) (invoke[PList[A]] xs);
 
-let rec foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+--let rec foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+--    case l of
+--        Nil             ->      z
+--     |  Cons x xs       ->      f x (foldr[A, B] f z (invoke[PList[A]] xs));
+
+let foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+    (let rec inner (s : PList[A]) (k : B -> B) : B =
+        case s of
+            Nil         -> k z
+         |  Cons x xs   -> inner (invoke[PList[A]] xs) (\(y : B) -> k (f x y));
+     inner l (\(x : B) -> x));
+
+
+let join[A] (l : PList[A]) (j : A) : PList[A] = {
+    let rec inner[A] (l : PList[A]) (j : A) : PList[A] =
+        case l of
+            Nil         -> (Nil[A])
+         |  Cons x xs   -> (Cons[A] j (\(__ : Unit) ->
+                                (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j))));
     case l of
-        Nil             ->      z
-     |  Cons x xs       ->      f x (foldr[A, B] f z xs);
+        Nil         -> (Nil[A])
+     |  Cons x xs   -> (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j))
+};
+
+let (+>)[A] (a : A) (l : PList[A]) : PList[A] =
+    Cons[A] a (\(__ : Unit) -> l);
 
 let rec concat2[A] (a : PList[A]) (b : PList[A]) : PList[A] =
     case a of
         Nil         ->  b
-      | Cons x xs   ->  Cons[A] x (concat2[A] xs b);
+      | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (concat2[A] (invoke[PList[A]] xs) b));
+
+let (@)[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+    concat2[A] a b;
 
 let rec concat[A] (l : PList[PList[A]]) : PList[A] =
     case l of
         Nil         ->  Nil[A]
-     |  Cons x xs   ->  concat2[A] x (concat[A] xs);
+     |  Cons x xs   ->  concat2[A] x (concat[A] (invoke[PList[PList[A]]] xs));
 
 let rec len[A] (l : PList[A]) : Int =
     case l of
         Nil         ->  0
-     |  Cons _ xs   ->  1 + (len[A] xs);
+     |  Cons _ xs   ->  1 + (len[A] (invoke[PList[A]] xs));
 
 let isempty[A] (l : PList[A]) : Bool =
     case l of
@@ -79,36 +95,59 @@ let isempty[A] (l : PList[A]) : Bool =
 let first[A] (l : PList[A]) : Maybe[A] =
     case l of
         Nil         -> Nothing[A]
-     |  Cons x xs   -> Just[A] x;
+     |  Cons x _    -> Just[A] x;
 
 let rest[A] (l : PList[A]) : Maybe[PList[A]] =
     case l of
         Nil         -> Nothing[PList[A]]
-     |  Cons x xs   -> Just[PList[A]] xs;
+     |  Cons _ xs   -> Just[PList[A]] (invoke[PList[A]] xs);
 
 let rec take[A] (n : Int) (l : PList[A]) : PList[A] =
     if n <= 0 then
         (Nil[A])
     else
         case l of
-            Nil         -> (Nil[A])
-         |  Cons x xs   -> (Cons[A] x (take[A] (n-1) xs));
-
-let join[A] (l : PList[A]) (j : A) : PList[A] = {
-    let rec inner[A] (l : PList[A]) (j : A) : PList[A] =
-        case l of
-            Nil         -> (Nil[A])
-         |  Cons x xs   -> (Cons[A] j (Cons[A] x (inner[A] xs j)));
-    case l of
-        Nil         -> (Nil[A])
-     |  Cons x xs   -> (Cons[A] x (inner[A] xs j))
-};
+            Nil         ->  Nil[A]
+         |  Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (take[A] (n-1) (invoke[PList[A]] xs)));
 
 let listToString[A] (l : PList[A]) (tostr : A -> String) : String =
-    (let inner = foldr[String, String] (\(a : String) (b : String) -> b.concat(a))
+    (let inner = foldl[String, String] (\(b : String) (a : String) -> b.concat(a))
                                        ""
                                        (join[String] (map[A, String] tostr l) ", ");
      "[".concat(inner).concat("]"));
+
+--let listToString[A] (l : PList[A]) (tostr : A -> String) : String = {
+--    type StringBuffer = java.lang.StringBuffer;
+--
+--    let inner = foldl[String, StringBuffer]
+--                    (\(b : StringBuffer) (a : String) -> b.append(a))
+--                    (new java.lang.StringBuffer("["))
+--                    (join[String] (map[A, String] tostr l) ", ");
+--
+--    inner.append("]").toString()
+--};
+
+-- ADT String
+
+type PString = PList[Char];
+
+let toString (l : PString) : String =
+    foldl[Char, String] (\(b : String) (a : Char) -> b.concat(a.toString())) "" l;
+
+let rec fromString (str : String) : PString =
+    if length(str) == 0 then
+        (Nil[Char])
+    else
+        (Cons[Char] str.charAt(0) (\(__ : Unit) -> (fromString str.substring(1))));
+
+let rec charin (c : Char) (str : PString) : Bool =
+    case str of
+        Nil         ->      False
+     |  Cons x xs   ->      if x == c then True else (charin c (invoke[PString] xs));
+
+-- Parser type definition
+
+type Parser[A] = PString -> PList[(A, PString)];
 
 -- Primitive Parsers
 
@@ -122,10 +161,7 @@ let item : Parser[Char] =
     \(inp : PString) ->
         case inp of
             Nil         ->      Nil[(Char, PString)]
-          | Cons c xs   ->      singleton[(Char, PString)] (c, xs);
-
-
-
+          | Cons c xs   ->      singleton[(Char, PString)] (c, (invoke[PString] xs));
 
 -- Combinators
 
@@ -135,6 +171,29 @@ let bind[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
               (map[(A, PString), PList[(B, PString)]]
                   (\(v : (A, PString)) -> f v._1 v._2) (p inp));
 
+let (>>=)[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
+    bind[A, B] p f;
+
+let (>>)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[B] =
+    p >>=[A, B] (\(__ : A) -> q);
+
+let (<*)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[A] =
+    p >>=[A, A] (\(a : A) ->
+    q >>=[B, A] (\(__ : B) ->
+    result[A] a));
+
+let (*>)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[B] =
+    p >>[A, B] q;
+
+let using[A, B] (p : Parser[A]) (f : A -> B) : Parser[B] =
+    bind[A, B] p (\(a : A) -> result[B] (f a));
+
+let (<$>)[A, B] (p : Parser[A]) (f : A -> B) : Parser[B] =
+    using[A, B] p f;
+
+let ($>)[A, B] (p : Parser[A]) (b : B) : Parser[B] =
+    using[A, B] p (\(__ : A) -> b);
+
 let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
     bind[A, (A, B)] p (\(x : A) ->
     bind[B, (A, B)] q (\(y : B) ->
@@ -142,7 +201,10 @@ let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
 
 let choice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     \(inp : PString) ->
-        concat2[(A, PString)] (p inp) (q inp);
+        (p inp) @[(A, PString)] (q inp);
+
+let (<|>)[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    choice[A] p q;
 
 let sat (f : Char -> Bool) : Parser[Char] =
     bind[Char, Char] item (\(x : Char) -> if f x then (result[Char] x) else zero[Char]);
@@ -174,39 +236,30 @@ let letter : Parser[Char] =
 let alphanum : Parser[Char] =
     choice[Char] letter digit;
 
--- Issue#116
 let noneof (s : PString) : Parser[Char] =
-    sat (\(x : Char) -> (charin x s) == False);
-
---let rec noneof (s : PString) : Parser[Char] =
---    case s of
---        Nil         ->  item
---     |  Cons x xs   ->  choice[Char] (notchar x) (noneof xs);
+    sat (\(x : Char)  -> (charin x s) == False);
 
 let rec string (s : PString) : Parser[PString] =
     case s of
         Nil         ->  result (Nil[Char])
      |  Cons x xs   ->
-            bind[Char, PString]    (char x)    (\(dummy1 : Char) ->
-            bind[PString, PString] (string xs) (\(dummy2 : PString) ->
-            result[PString] (Cons[Char] x xs)));
-
---let optional[A] (p : Parser[A]) : Parser[A] =
---    \(inp : PString) ->
---        concat2[(A, PString)] (p inp) (Nil[(A, PString)]);
+            (let xs = invoke[PString] xs;
+             bind[Char, PString]    (char x)    (\(dummy1 : Char) ->
+             bind[PString, PString] (string xs) (\(dummy2 : PString) ->
+             result[PString] (Cons[Char] x (\(__ : Unit) -> xs)))));
 
 -- Repetition
 
 let rec many[A] (p : Parser[A]) : Parser[PList[A]] =
     choice[PList[A]] (bind[A, PList[A]] p (\(x : A) ->
                       bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
-                      result[PList[A]] (Cons[A] x xs))))
+                      result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs)))))
                      (result[PList[A]] (Nil[A]));
 
 let many1[A] (p : Parser[A]) : Parser[PList[A]] =
     bind[A, PList[A]] p (\(x : A) ->
     bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
-    result[PList[A]] (Cons[A] x xs)));
+    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
 
 let word : Parser[PString] =
     many1[Char] letter;
@@ -214,19 +267,20 @@ let word : Parser[PString] =
 let ident : Parser[PString] =
     bind[Char, PString] lower (\(x : Char) ->
     bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
-    result[PString] (Cons[Char] x xs)));
+    result[PString] (Cons[Char] x (\(__ : Unit) -> xs))));
 
 let natural : Parser[Int] = {
-    let eval (xs : PList[Char]) =
+    let invokeuate (xs : PList[Char]) =
         foldl[Int, Int] (\(b : Int) (a : Int) -> 10 * b + a)
                         0
                         (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 10)) xs);
 
-    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs))
+    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (invokeuate xs))
 };
 
 let int : Parser[Int] =
-    choice[Int] (bind[Char, Int] (char '-') (\(__ : Char) -> bind[Int,Int] natural (\(n : Int) -> result[Int] (0-n))))
+    choice[Int] ((char '-') >>[Char, Int]
+                 (using[Int,Int] natural (\(n : Int) -> (-n))))
               natural;
 
 -- Repetition with seperators
@@ -236,7 +290,7 @@ let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] = {
         bind[B, A] sep (\(s : B) -> bind[A, A] p (\(y : A) -> result[A] y));
     bind[A, PList[A]] p (\(x : A) ->
     bind[PList[A], PList[A]] (many[A] (rep[A, B] p)) (\(xs : PList[A]) ->
-    result[PList[A]] (Cons[A] x xs)))
+    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))))
 };
 
 let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
@@ -281,7 +335,6 @@ let chainr[A] (p : Parser[A]) (op : Parser[A -> A -> A]) (v : A) : Parser[A] =
 --            Nil         -> (Nil[(A, PString)])
 --         |  Cons x xs   -> (singleton[(A, PString)] x);
 
--- If doesn't care about lazy evaluation, then this version is fancy
 let only[A] (p : Parser[A]) : Parser[A] =
     \(inp : PString) -> take[(A, PString)] 1 (p inp);
 
@@ -290,13 +343,9 @@ let lazychoice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     only[A] (choice[A] p q);
 
 -- Simple arithmetic expression
--- FIXME: Issue110
 
 let bracket[A, B, C] (open : Parser[A]) (p : Parser[B]) (close : Parser[C]) : Parser[B] =
-    bind[A, B] open   (\(o : A) ->
-    bind[B, B] p      (\(x : B) ->
-    bind[C, B] close  (\(c : C) ->
-    result[B] x)));
+    open *>[A, B] p <*[B, C] close;
 
 let operation = {
     let addop (a : Int) (b : Int) : Int = a + b;
@@ -304,41 +353,21 @@ let operation = {
     let mulop (a : Int) (b : Int) : Int = a * b;
     let divop (a : Int) (b : Int) : Int = a / b;
 
---    let add_sub = choice[Int -> Int -> Int]
---        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
---        (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop));
---    let mul_div = choice[Int -> Int -> Int]
---        (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
---        (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop));
+    let add = (char '+') $>[Char, Int -> Int -> Int] addop;
+    let sub = (char '-') $>[Char, Int -> Int -> Int] subop;
+    let mul = (char '*') $>[Char, Int -> Int -> Int] mulop;
+    let div = (char '/') $>[Char, Int -> Int -> Int] divop;
 
---    choice[Int -> Int -> Int] add_sub mul_div
-
-    -- Fancy style
-    foldr[Parser[Int -> Int -> Int], Parser[Int -> Int -> Int]] (choice[Int -> Int -> Int])
-        (bind[Char, Int -> Int -> Int] (char '+') (\(c : Char) -> result[Int -> Int -> Int] addop))
-        (Cons[Parser[Int -> Int -> Int]]
-            (bind[Char, Int -> Int -> Int] (char '-') (\(c : Char) -> result[Int -> Int -> Int] subop))
-            (Cons[Parser[Int -> Int -> Int]]
-                (bind[Char, Int -> Int -> Int] (char '*') (\(c : Char) -> result[Int -> Int -> Int] mulop))
-                (Cons[Parser[Int -> Int -> Int]]
-                    (bind[Char, Int -> Int -> Int] (char '/') (\(c : Char) -> result[Int -> Int -> Int] divop))
-                    (Nil[Parser[Int -> Int -> Int]]))))
+    add `choice[Int -> Int -> Int]` sub `choice[Int -> Int -> Int]` mul `choice[Int -> Int -> Int]` div
 };
 
--- Will throw null pointer exception
---let rec expr : Parser[Int] =
---    chainl1[Int] factor operation
---and factor : Parser[Int] =
---    choice[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')'));
-
--- Workaround in Issue#110
--- Unbelievable solution!!!!
 let rec expr : Parser[Int] =
     \(s : PString) -> chainl1[Int] factor operation s
 and factor : Parser[Int] =
     \(s : PString) -> choice[Int] natural (bracket[Char, Int, Char] (char '(') expr (char ')')) s;
 
 -- Naive XML Parser
+
 data XMLNode = XMLText      PString
              | XMLAttr      (PString, PString)
              | XMLElement   PString PList[XMLNode] PList[XMLNode]
@@ -346,11 +375,16 @@ data XMLNode = XMLText      PString
              | XMLComment   PString
              ;
 
+--let xmlComment : Parser[PList[Char]] =
+--    bind[PString, PList[Char]]     (string (fromString "<!--")) (\(cstart : PString) ->
+--    bind[PList[Char], PList[Char]] (many[Char] item) (\(comment : PList[Char]) ->
+--    bind[PString, PList[Char]]     (string (fromString "-->")) (\(cend : PString) ->
+--    result[PList[Char]] comment)));
+
 let xmlComment : Parser[PList[Char]] =
-    bind[PString, PList[Char]]     (string (fromString "<!--")) (\(cstart : PString) ->
-    bind[PList[Char], PList[Char]] (many[Char] item) (\(comment : PList[Char]) ->
-    bind[PString, PList[Char]]     (string (fromString "-->")) (\(cend : PString) ->
-    result[PList[Char]] comment)));
+    (string (fromString "<!--"))
+        *>[PString, PList[Char]] (many[Char] item)
+        <*[PList[Char], PString] (string (fromString "-->"));
 
 --let xmlSpace : Parser[Unit] =
 --    only[Unit]
@@ -367,109 +401,147 @@ let xmlSpace : Parser[Unit] =
              bind[PList[Char], Unit] (many[Char] whitespace) (\(sp2 : PList[Char]) ->
              result[Unit] ())))));
 
--- Fancy! <-_<-
-let xmlEscapedChar : Parser[Char] =
-    foldr[Parser[Char], Parser[Char]] (choice[Char])
-        (bind[PString, Char] (string (fromString "&quot;")) (\(__ : PString) -> result[Char] '"'))
-        (Cons[Parser[Char]]
-            (bind[PString, Char] (string (fromString "&apos;")) (\(__ : PString) -> result[Char] '\''))
-            (Cons[Parser[Char]]
-                (bind[PString, Char] (string (fromString "&lt;")) (\(__ : PString) -> result[Char] '<'))
-                (Cons[Parser[Char]]
-                    (bind[PString, Char] (string (fromString "&gt;")) (\(__ : PString) -> result[Char] '>'))
-                    (Cons[Parser[Char]]
-                        (bind[PString, Char] (string (fromString "&amp;")) (\(__ : PString) -> result[Char] '&'))
-                        (Nil[Parser[Char]])))));
-
 -- Normal version
---let xmlEscapedChar : Parser[Char] = {
---    let quot = bind[PString, Char] (string (fromString "&quot;")) (\(__ : PString) -> result[Char] '"');
---    let apos = bind[PString, Char] (string (fromString "&apos;")) (\(__ : PString) -> result[Char] '\'');
---    let lt = bind[PString, Char] (string (fromString "&lt;")) (\(__ : PString) -> result[Char] '<');
---    let gt = bind[PString, Char] (string (fromString "&gt;")) (\(__ : PString) -> result[Char] '>');
---    let amp = bind[PString, Char] (string (fromString "&amp;")) (\(__ : PString) -> result[Char] '&');
---
---    choice[Char]
---        quot
---        (choice[Char]
---            apos
---            (choice[Char]
---                lt
---                (choice[Char]
---                    gt
---                    amp)))
---};
+let xmlEscapedChar : Parser[Char] = {
+    let quot = (string (fromString "&quot;")) $>[PString, Char] '"';
+    let apos = (string (fromString "&apos;")) $>[PString, Char] '\'';
+    let lt = (string (fromString "&lt;"))     $>[PString, Char] '<';
+    let gt = (string (fromString "&gt;"))     $>[PString, Char] '>';
+    let amp = (string (fromString "&amp;"))   $>[PString, Char] '&';
+
+    quot `choice[Char]` apos `choice[Char]` lt `choice[Char]` gt `choice[Char]` amp
+};
 
 let xmlChar : Parser[Char] =
-    choice[Char] xmlEscapedChar (noneof (fromString "\"'<>&"));
+    xmlEscapedChar <|>[Char] (noneof (fromString "\"'<>&"));
 
 let xmlString : Parser[PString] =
     many[Char] xmlChar;
 
 let xmlDoubleQuotedString : Parser[PString] =
-    bind[Char, PString]       (char '"')    (\(sstart : Char) ->
-    bind[PString, PString]    xmlString     (\(content: PString) ->
-    bind[Char, PString]       (char '"')    (\(send : Char) ->
-    result[PString] content)));
+    (char '"') *>[Char, PString] xmlString <*[PString, Char] (char '"');
 
 let xmlSingleQuotedString : Parser[PString] =
-    bind[Char, PString]       (char '\'')   (\(sstart : Char) ->
-    bind[PString, PString]    xmlString     (\(content: PString) ->
-    bind[Char, PString]       (char '\'')   (\(send : Char) ->
-    result[PString] content)));
+    (char '\'') *>[Char, PString] xmlString <*[PString, Char] (char '\'');
 
 let xmlQuotedString : Parser[PString] =
     choice[PString] xmlDoubleQuotedString xmlSingleQuotedString;
 
-let rec xmlText : Parser[XMLNode] =
-    bind[PString, XMLNode] xmlString (\(content : PString) -> result[XMLNode] (XMLText content))
+let xmlText : Parser[XMLNode] =
+    xmlString <$>[PString, XMLNode] (\(content : PString) -> XMLText content);
 
-and xmlKey : Parser[PString] =
-    word
+let xmlCData : Parser[XMLNode] =
+    string (fromString "<![CDATA[")
+        *>[PString, PList[Char]] (many[Char] item)
+            <$>[PList[Char], XMLNode] (\(cd : PList[Char]) -> XMLCData cd)
+        <*[XMLNode, PString] (string (fromString "]]>"));
 
-and xmlAttr : Parser[XMLNode] =
-    bind[PString, XMLNode]      xmlKey              (\(key : PString) ->
-    bind[Unit, XMLNode]         xmlSpace            (\(sp1 : Unit) ->
-    bind[Char, XMLNode]         (char '=')          (\(eq : Char) ->
-    bind[Unit, XMLNode]         xmlSpace            (\(sp2 : Unit) ->
-    bind[PString, XMLNode]      xmlQuotedString     (\(val : PString) ->
-    result[XMLNode] (XMLAttr (key, val)))))))
+let xmlKey : Parser[PString] =
+    word;
 
-and xmlAttrs : Parser[PList[XMLNode]] =
-    sepby[XMLNode, Unit] xmlAttr xmlSpace
+let xmlAttr : Parser[XMLNode] =
+    bind[PString, XMLNode]  xmlKey                                                          (\(key : PString) ->
+    bind[PString, XMLNode]  (xmlSpace >>[Unit, Char] (char '=')
+                                      >>[Char, Unit] xmlSpace
+                                      >>[Unit, PString] xmlQuotedString)                    (\(val : PString) ->
+    result[XMLNode] (XMLAttr (key, val))));
 
-and xmlEndTag (tag : PString) : Parser[Unit] =
-    bind[PString, Unit]             (string (fromString "</"))                  (\(__ : PString) ->
-    bind[Unit, Unit]                xmlSpace                                    (\(__ : Unit) ->
-    bind[PString, Unit]             (string tag)                                (\(__ : PString) ->
-    bind[Unit, Unit]                xmlSpace                                    (\(__ : Unit) ->
-    bind[Char, Unit]                (char '>')                                  (\(__ : Char) ->
-    result[Unit] ())))))
+let xmlAttrs : Parser[PList[XMLNode]] =
+    sepby[XMLNode, Unit] xmlAttr xmlSpace;
 
-and xmlElement : Parser[XMLNode] =
-    bind[Char, XMLNode]             (char '<')                                  (\(__ : Char) ->
-    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
-    bind[PString, XMLNode]          xmlKey                                      (\(tag : PString) ->
-    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
-    bind[PList[XMLNode], XMLNode]   (sepby[XMLNode, Unit] xmlAttr xmlSpace)     (\(attrs: PList[XMLNode]) ->
-    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
-    bind[Char, XMLNode]             (char '>')                                  (\(__ : Char) ->
-    bind[PList[XMLNode], XMLNode]   (many1[XMLNode] xmlNode)                    (\(ch : PList[XMLNode]) ->
-    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
-    bind[Unit, XMLNode]             (xmlEndTag tag)                             (\(__ : Unit) ->
-    result[XMLNode] (XMLElement tag attrs ch)))))))))))
+let xmlEndTag (tag : PString) : Parser[Unit] =
+    (string (fromString "</"))
+        >>[PString, Unit]   xmlSpace
+        >>[Unit, PString]   (string tag)
+        >>[PString, Unit]   xmlSpace
+        >>[Unit, Char]      (char '>')
+        $>[Char, Unit]      ();
 
-and xmlNode : Parser[XMLNode] =
-    choice[XMLNode] xmlText xmlElement;
+--let rec xmlElement : Parser[XMLNode] =
+--    bind[Char, XMLNode]             (char '<')                                  (\(__ : Char) ->
+--    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
+--    bind[PString, XMLNode]          xmlKey                                      (\(tag : PString) ->
+--    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
+--    bind[PList[XMLNode], XMLNode]   xmlAttrs                                    (\(attrs: PList[XMLNode]) ->
+--    bind[Unit, XMLNode]             xmlSpace                                    (\(__ : Unit) ->
+--        (bind[Char, XMLNode]             (char '>')                             (\(__ : Char) ->
+--         bind[Unit, XMLNode]             xmlSpace                               (\(__ : Unit) ->
+--         bind[PList[XMLNode], XMLNode]   xmlElementChildren                     (\(ch : PList[XMLNode]) ->
+--         bind[Unit, XMLNode]             xmlSpace                               (\(__ : Unit) ->
+--         bind[Unit, XMLNode]             (xmlEndTag tag)                        (\(__ : Unit) ->
+--         result[XMLNode] (XMLElement tag attrs ch)))))))
+--
+--        `choice[XMLNode]` -- ^~~ normal style  v~~ shorter style
+--
+--        ((string (fromString "/>")) <$>[PString, XMLNode] (\(__ : PString) -> (XMLElement tag attrs (Nil[XMLNode]))))
+--    ))))))
+
+let rec xmlElement : Parser[XMLNode] =
+    (char '<') >>[Char, Unit] xmlSpace >>[Unit, PString] xmlKey >>=[PString, XMLNode] (\(tag : PString) ->
+        xmlSpace >>[Unit, PList[XMLNode]] xmlAttrs >>=[PList[XMLNode], XMLNode] (\(attrs : PList[XMLNode]) ->
+            -- Normal ends
+            ((char '>') >>[Char, Unit] xmlSpace >>[Unit, PList[XMLNode]]
+                xmlElementChildren <*[PList[XMLNode], Unit] xmlSpace <*[PList[XMLNode], Unit] (xmlEndTag tag)
+                    <$>[PList[XMLNode], XMLNode] (\(ch : PList[XMLNode]) -> XMLElement tag attrs ch))
+
+            <|>[XMLNode]
+
+            -- Short ends
+            ((string (fromString "/>"))
+                >>[PString, XMLNode] (result[XMLNode] (XMLElement tag attrs (Nil[XMLNode]))))))
+
+and xmlElementChildren : Parser[PList[XMLNode]] =
+    (many1[XMLNode] xmlCData)
+        <|>[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
+        <|>[PList[XMLNode]] (many1[XMLNode] xmlElement);
+
+let xmlNode : Parser[XMLNode] =
+    xmlElement;
 
 
--- Test helper functions
+-- Test
+
+let println (s : String) : Unit = { java.lang.System.out.println(s); () };
+let print (s : String) : Unit = { java.lang.System.out.print(s); () };
+
+type TestFn = {
+    name : String,
+    fn   : Unit -> Unit
+};
+
+type TestSuite = {
+    name : String,
+    fns  : PList[TestFn]
+};
+
+let runTest (test : TestFn) : Unit = {
+    let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m... ";
+    println testingPrefix.concat(test.name).concat(" :");
+    test.fn ();
+    println "\t...ok"
+};
+
+let runTests (tests : PList[TestFn]) : Unit =
+    foldl[TestFn, Unit]
+        (\(__ : Unit) (fn : TestFn) -> runTest fn) () tests;
+
+let runTestSuite (suite : TestSuite) : Unit = {
+    println "\n\t\u001b[32;1mRunning\u001b[37;1m ".concat(suite.name).concat("\u001b[0m ...\n");
+    println "Running ".concat((len[TestFn] suite.fns).toString()).concat(" tests");
+    runTests suite.fns
+};
+
+let runTestSuites (suites : PList[TestSuite]) : Unit =
+    foldl[TestSuite, Unit]
+        (\(__ : Unit) (suite : TestSuite) -> runTestSuite suite) () suites;
 
 let error (msg : String) = {
     java.lang.System.err.println(msg);
     java.lang.System.exit(1);
     ()
 };
+
+-- Test helper functions
 
 let assert (b : Bool) =
     if b then
@@ -482,7 +554,10 @@ let rec listEqual [A] (a : PList[A]) (b : PList[A]) : Bool =
         Nil         -> { case b of Nil -> True | Cons x xs -> False }
      |  Cons x xs   -> case b of
                             Nil          -> False
-                         |  Cons xb xsb  -> if x == xb then listEqual[A] xs xsb else False;
+                         |  Cons xb xsb  ->
+                                if x == xb then
+                                    listEqual[A] (invoke[PList[A]] xs) (invoke[PList[A]] xsb)
+                                else False;
 
 let rec parseListEqual [A] (a : PList[(A, PString)]) (b : PList[(A, PString)]) : Bool =
     case a of
@@ -490,7 +565,8 @@ let rec parseListEqual [A] (a : PList[(A, PString)]) (b : PList[(A, PString)]) :
      |  Cons x xs   -> case b of
                             Nil          -> False
                          |  Cons xb xsb  -> if x._1 == xb._1 && (listEqual[Char] x._2 xb._2) then
-                                                parseListEqual[A] xs xsb
+                                                parseListEqual[A] (invoke[PList[(A, PString)]] xs)
+                                                                  (invoke[PList[(A, PString)]] xsb)
                                             else False;
 
 let rec parseStringEqual (a : PList[(PString, PString)]) (b : PList[(PString, PString)]) : Bool =
@@ -498,9 +574,11 @@ let rec parseStringEqual (a : PList[(PString, PString)]) (b : PList[(PString, PS
         Nil         -> { case b of Nil -> True | Cons x xs -> False }
      |  Cons x xs   -> case b of
                             Nil          -> False
-                         |  Cons xb xsb  -> if (listEqual[Char] x._1 xb._1) && (listEqual[Char] x._2 xb._2) then
-                                                (parseStringEqual xs xsb)
-                                            else False;
+                         |  Cons xb xsb  ->
+                                if (listEqual[Char] x._1 xb._1) && (listEqual[Char] x._2 xb._2) then
+                                    (parseStringEqual (invoke[PList[(PString, PString)]] xs)
+                                                      (invoke[PList[(PString, PString)]] xsb))
+                                else False;
 
 let rec polyStringResultToString (r : PList[(PString, PString)]) : String =
     listToString[(PString, PString)] r
@@ -526,9 +604,6 @@ let rec xmlNodeToString (xml : XMLNode) : String =
                             .concat(listToString[XMLNode] attrs xmlNodeToString)
                             .concat(" ")
                             .concat(listToString[XMLNode] children xmlNodeToString);
-
-let println (s : String) = java.lang.System.out.println(s);
-let print (s : String) = java.lang.System.out.print(s);
 
 let printStringResult (r : PList[(PString, PString)]) =
     print (polyStringResultToString r);
@@ -556,147 +631,341 @@ let printFirstXMLResult (r : PList[(XMLNode, PString)]) =
         Nothing        -> print "Nothing in the List!!"
      |  Just x         -> print "(".concat(xmlNodeToString x._1).concat(", \"").concat(toString x._2).concat("\")");
 
-{
-    println "------- Test Utilities -------";
+let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m... ";
+let (<++>) (a : String) (b : String) : String =
+    a.concat(b);
 
-    print "testing listEqual: ";
-    assert (listEqual[Int] (singleton[Int] 1) (singleton[Int] 1));
-    println "\t...ok";
+-- Test utilities
 
-    print "testing map: ";
-    assert (listEqual[Char] (map[Char,Char] (\(c : Char) -> 'm') (fromString "hello")) (fromString "mmmmm"));
-    println "\t...ok";
+let testListEqual : TestFn = {
+    name = "listEqual",
+    fn   = \(__ : Unit) -> assert (listEqual[Int] (singleton[Int] 1) (singleton[Int] 1))
+};
 
-    print "testing foldr: ";
-    let testlist = Cons[Int] 1 (Cons[Int] 2 (Cons[Int] 3 (Cons[Int] 4 (Cons[Int] 5 (Nil[Int])))));
-    assert ((foldr[Int,Int] (\(a : Int) (b : Int) -> a + b) 0 testlist) == 15);
-    println "\t...ok";
+let testMap : TestFn = {
+    name = "map",
+    fn   = \(__ : Unit) -> assert (listEqual[Char] (map[Char,Char] (\(c : Char) -> 'm') (fromString "hello"))
+                                        (fromString "mmmmm"))
+};
 
-    print "testing foldl: ";
-    let testlist = Cons[Int] 1 (Cons[Int] 2 (Cons[Int] 3 (Cons[Int] 4 (Cons[Int] 5 (Nil[Int])))));
-    assert ((foldl[Int,Int] (\(b : Int) (a : Int) -> a + b) 0 testlist) == 15);
-    println "\t...ok";
+let testFoldr : TestFn = {
+    name = "foldr",
+    fn   = \(__ : Unit) -> assert ((foldr[Int,Int] (\(a : Int) (b : Int) -> a + b) 0 (take[Int] 5 (nats 1))) == 15)
+};
 
-    println "\n------- Test Combinators -------";
+let testFoldl : TestFn = {
+    name = "foldl",
+    fn   = \(__ : Unit) -> assert ((foldl[Int,Int] (\(b : Int) (a : Int) -> a + b) 0 (take[Int] 5 (nats 1))) == 15)
+};
 
-    print "testing char 'a' (fromString \"abcd\"): ";
-    assert (parseListEqual[Char]
-                          (char 'a' (fromString "abcd"))
-                          (singleton[(Char, PString)] ('a', (fromString "bcd"))));
-    println "\t...ok";
+let testUtilitiesSuite : TestSuite = {
+    name = "Test Utilities",
+    fns  = testListEqual
+                +>[TestFn] (testMap
+                +>[TestFn] (testFoldr
+                +>[TestFn] (testFoldl
+                +>[TestFn] (Nil[TestFn]))))
+};
 
-    print "testing upper (fromString \"ABC\"): ";
-    assert (parseListEqual[Char]
-                          (upper (fromString "ABC"))
-                          (singleton[(Char, PString)] ('A', (fromString "BC"))));
-    println "\t...ok";
+-- Test combinators
 
-    print "testing letter (fromString \"abcd\"): ";
-    printCharResult (letter (fromString "abcd"));
-    assert (parseListEqual[Char] (letter (fromString "abcd")) (singleton[(Char, PString)] ('a', (fromString "bcd"))));
-    println "\t...ok";
+let testChar : TestFn = {
+    name = "char 'a' (fromString \"abcd\")",
+    fn   = \(__ : Unit) -> assert (parseListEqual[Char]
+                                      (char 'a' (fromString "abcd"))
+                                      (singleton[(Char, PString)] ('a', (fromString "bcd"))))
+};
 
-    print "testing string (fromString \"abc\") (fromString \"abcd\"): ";
-    assert (parseStringEqual (string (fromString "abc") (fromString "abcd"))
-                             (singleton[(PString, PString)] ((fromString "abc"), (fromString "d"))));
-    println "\t...ok";
+let testUpper : TestFn = {
+    name = "upper (fromString \"ABC\")",
+    fn   = \(__ : Unit) -> assert (parseListEqual[Char]
+                                      (upper (fromString "ABC"))
+                                      (singleton[(Char, PString)] ('A', (fromString "BC"))))
+};
 
-    print "testing many (char 'a') (fromString \"aaab\"): ";
-    -- Should be [("", "aaab"), ("a", "aab"), ("aa", "ab"), ("aaa", "b")]
-    printStringResult (many[Char] (char 'a') (fromString "aaab"));
-    println "\t...ok";
+let testLetter : TestFn = {
+    name = "letter (fromString \"abcd\")",
+    fn   = \(__ : Unit) -> assert (parseListEqual[Char] (letter (fromString "abcd"))
+                                    (singleton[(Char, PString)] ('a', (fromString "bcd"))))
+};
 
-    print "testing many1 (char 'a') (fromString \"aaab\"): ";
-    -- Should be [("a", "aab"), ("aa", "ab"), ("aaa", "b")]
-    printStringResult (many1[Char] (char 'a') (fromString "aaab"));
-    println "\t...ok";
+let testString : TestFn = {
+    name = "string (fromString \"abc\") (fromString \"abcd\")",
+    fn   = \(__ : Unit) -> assert (parseStringEqual (string (fromString "abc") (fromString "abcd"))
+                                         (singleton[(PString, PString)] ((fromString "abc"), (fromString "d"))))
+};
 
-    print "testing choice (char 'a') (char 'b') (fromString \"aaab\"): ";
-    assert (parseListEqual[Char] (choice[Char] (char 'a') (char 'b') (fromString "aaab"))
-                                 (singleton[(Char, PString)] ('a', fromString "aab")));
-    println "\t...ok";
+let testMany : TestFn = {
+    name = "many (char 'a') (fromString \"aaab\")",
+    fn   = \(__ : Unit) -> printStringResult (many[Char] (char 'a') (fromString "aaab"))
+};
 
-    println "testing choice (string \"aa\") (string \"aaa\") (fromString \"aaab\"): ";
-    printStringResult (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
+let testMany1 : TestFn = {
+    name = "many1 (char 'a') (fromString \"aaab\")",
+    fn   = \(__ : Unit) -> printStringResult (many1[Char] (char 'a') (fromString "aaab"))
+};
+
+let testChoice : TestFn = {
+    name = "choice (char 'a') (char 'b') (fromString \"aaab\")",
+    fn   = \(__ : Unit) -> assert (parseListEqual[Char] (choice[Char] (char 'a') (char 'b') (fromString "aaab"))
+                                 (singleton[(Char, PString)] ('a', fromString "aab")))
+};
+
+let testChoice2 : TestFn = {
+    name = "choice (string \"aa\") (string \"aaa\") (fromString \"aaab\")",
+    fn   = \(__ : Unit) -> {
+        printStringResult (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"));
     assert (parseStringEqual (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"))
            (concat2[(PString, PString)] (singleton[(PString, PString)] (fromString "aa", fromString "ab"))
-                                        (singleton[(PString, PString)] (fromString "aaa", fromString "b"))));
-    println "\t...ok";
+                                        (singleton[(PString, PString)] (fromString "aaa", fromString "b"))))
+    }
+};
 
-    println "testing word (fromString \"aaabcd abcd\"): ";
-    printStringResult (word (fromString "aaabcd abcd"));
-    println "\t...ok";
+let testWord : TestFn = {
+    name = "word (fromString \"aaabcd abcd\")",
+    fn   = \(__ : Unit) -> printStringResult (word (fromString "aaabcd abcd"))
+};
 
-    println "testing natural (fromString \"12345\"): ";
-    printIntResult (natural (fromString "12345"));
-    println "\t...ok";
+let testNatural : TestFn = {
+    name = "natural (fromString \"12345\")",
+    fn   = \(__ : Unit) -> printIntResult (natural (fromString "12345"))
+};
 
-    println "testing sepby1[PString, Char] word (char ',') (fromString \"abc,def\"): ";
-    assert (len[(PList[PString], PString)] (sepby1[PString, Char] (word) (char ',') (fromString "abc,def")) == 6);
-    println "\t...ok";
+let testSepby1 : TestFn = {
+    name = "sepby1[PString, Char] word (char ',') (fromString \"abc,def\")",
+    fn   = \(__ : Unit) ->
+        assert (len[(PList[PString], PString)] (sepby1[PString, Char] (word) (char ',') (fromString "abc,def")) == 6)
+};
 
-    println "testing noneof (fromString \"abc\") (fromString \"dce\"): ";
-    printFirstCharResult (noneof (fromString "abc") (fromString "dce"));
-    println "\t...ok";
+let testNoneOf : TestFn = {
+    name = "noneof (fromString \"abc\") (fromString \"dce\")",
+    fn   = \(__ : Unit) ->
+        printFirstCharResult (noneof (fromString "abc") (fromString "dce"))
+};
 
+let testCombinatorsSuite : TestSuite = {
+    name = "Test Combinators",
+    fns  = testChar
+                +>[TestFn] (testUpper
+                +>[TestFn] (testLetter
+                +>[TestFn] (testString
+                +>[TestFn] (testMany
+                +>[TestFn] (testMany1
+                +>[TestFn] (testChoice
+                +>[TestFn] (testChoice2
+                +>[TestFn] (testWord
+                +>[TestFn] (testNatural
+                +>[TestFn] (testSepby1
+                +>[TestFn] (Nil[TestFn])))))))))))
+};
 
-    println "\n---------- Test Simple Arithmetic Expression Parser ------------";
+-- Test Simple ARithmetic Expression Parser
 
-    println "testing expr (fromString \"123\"): ";
-    printFirstIntResult (expr (fromString "123"));
-    println "\t...ok";
+let testSimpleExpr : TestFn = {
+    name = "expr (fromString \"123\")",
+    fn   = \(__ : Unit) -> printFirstIntResult (expr (fromString "123"))
+};
 
-    println "testing expr (fromString \"(123)\"): ";
-    printFirstIntResult (expr (fromString "(123)"));
-    println "\t...ok";
+let testSimpleExprWithBracket : TestFn = {
+    name = "expr (fromString \"(123)\")",
+    fn   = \(__ : Unit) -> printFirstIntResult (expr (fromString "(123)"))
+};
 
-    println "testing expr (fromString \"1+2\"): ";
-    printFirstIntResult (expr (fromString "1+2"));
-    println "\t...ok";
+let testSimpleExpr2 : TestFn = {
+    name = "expr (fromString \"1+2\")",
+    fn   = \(__ : Unit) -> printFirstIntResult (expr (fromString "1+2"))
+};
 
-    println "testing expr (fromString \"10+2\"): ";
-    printFirstIntResult (expr (fromString "10+2"));
-    println "\t...ok";
+let testSimpleExpr3 : TestFn = {
+    name = "expr (fromString \"10+2\")",
+    fn   = \(__ : Unit) -> printFirstIntResult (expr (fromString "10+2"))
+};
 
-    println "testing expr (fromString \"(10+2)*2\"): ";
-    printFirstIntResult (expr (fromString "(10+2)*2"));
-    println "\t...ok";
+let testSimpleExpr4 : TestFn = {
+    name = "expr (fromString \"(10+2)*2\")",
+    fn   = \(__ : Unit) -> printFirstIntResult (expr (fromString "(10+2)*2"))
+};
 
-    println "testing expr (fromString \"(10+2)*2/6\"): ";
-    printFirstIntResult (expr (fromString "(10+2)*2/6"));
-    println "\t...ok";
+let testSimpleExpr5 : TestFn = {
+    name = "expr (fromString \"(10+2)*2/6\")",
+    fn   = \(__ : Unit) -> printFirstIntResult (expr (fromString "(10+2)*2/6"))
+};
 
+let testSimpleArithmetricExprSuite : TestSuite = {
+    name = "Test Simple Arithmetic Suite",
+    fns  = testSimpleExpr
+                +>[TestFn] (testSimpleExprWithBracket
+                +>[TestFn] (testSimpleExpr2
+                +>[TestFn] (testSimpleExpr3
+                +>[TestFn] (testSimpleExpr4
+                +>[TestFn] (testSimpleExpr5
+                +>[TestFn] (Nil[TestFn]))))))
+};
 
-    println "\n ---------- Test Naive XML Parser ------------";
+-- Test Naive XML Parser
 
-    println "testing xmlComment (fromString \"<!-- hahaa? -->\"): ";
-    printFirstStringResult (xmlComment (fromString "<!-- hahaa? -->"));
-    println "\t...ok";
+let testXMLComment : TestFn = {
+    name = "xmlComment (fromString \"<!-- hahaa? -->\")",
+    fn   = \(__ : Unit) -> printFirstStringResult (xmlComment (fromString "<!-- hahaa? -->"))
+};
 
-    println "testing xmlDoubleQuotedString (fromString \"\\\"abcdef\\\"\"): ";
-    printFirstStringResult (xmlDoubleQuotedString (fromString "\"abcdef\""));
-    println "\t...ok";
+let testXMLDoubleQuotedString : TestFn = {
+    name = "xmlDoubleQuotedString (fromString \"\\\"abcdef\\\"\")",
+    fn   = \(__ : Unit) -> printFirstStringResult (xmlDoubleQuotedString (fromString "\"abcdef\""))
+};
 
-    println "testing xmlSingleQuotedString (fromString \"'abcdef'\"): ";
-    printFirstStringResult (xmlSingleQuotedString (fromString "'abcdef'"));
-    println "\t...ok";
+let testXMLSingleQuotedString : TestFn = {
+    name = "xmlSingleQuotedString (fromString \"'abcdef'\")",
+    fn   = \(__ : Unit) -> printFirstStringResult (xmlSingleQuotedString (fromString "'abcdef'"))
+};
 
-    println "testing xmlSingleQuotedString (fromString \"'abcdef'\"): ";
-    printFirstStringResult (xmlSingleQuotedString (fromString "'abcdef'"));
-    println "\t...ok";
+let testXMLText : TestFn = {
+    name = "xmlText (fromString \"abcdefg&lt;hijk\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlText (fromString "abcdefg&lt;hijk"))
+};
 
-    println "testing xmlText (fromString \"abcdefg&lt;hijk\"): ";
-    printFirstXMLResult (xmlText (fromString "abcdefg&lt;hijk"));
-    println "\t...ok";
+let testXMLTextEmpty : TestFn = {
+    name = "xmlText (fromString \"\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlText (fromString ""))
+};
 
-    println "testing xmlAttr (fromString \"key = \"vvvalue\"\"): ";
-    printFirstXMLResult (xmlAttr (fromString "key = \"vvvalue\""));
-    println "\t...ok";
+let testXMLAttr : TestFn = {
+    name = "xmlAttr (fromString \"key = \"vvvalue\"\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlAttr (fromString "key = \"vvvalue\""))
+};
 
-    -- FIXME: Stack Overflow
-    println "testing xmlElement (fromString \"<a></a>\"): ";
-    printFirstXMLResult (xmlElement (fromString "<a></a>"));
-    println "\t...ok";
+let testXMLAttrs : TestFn = {
+    name = "xmlAttrs (fromString \"key = \\\"vvvalue\\\" hello = \\\"world\\\" haha='what?'\")",
+    fn   = \(__ : Unit) ->
+        case first[(PList[XMLNode], PString)]
+            (xmlAttrs (fromString "key = \"vvvalue\" hello = \"world\" haha='what?'")) of
+
+            Nothing   ->  print "Noting in the List"
+         |  Just x    ->  print "(".concat(listToString[XMLNode] x._1 xmlNodeToString)
+                                   .concat(", \"")
+                                   .concat(toString x._2)
+                                   .concat("\")")
+};
+
+let testElementSimple : TestFn = {
+    name = "xmlElement (fromString \"<a></a>\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlElement (fromString "<a></a>"))
+};
+
+let testElementWithText : TestFn = {
+    name = "xmlElement (fromString \"<a>ha?haha!</a>\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlElement (fromString "<a>ha?haha!</a>"))
+};
+
+let testElementWithChildren : TestFn = {
+    name = "xmlElement (fromString \"<a><b></b></a>\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlElement (fromString "<a><b></b></a>"))
+};
+
+let testElementWithChildren2 : TestFn = {
+    name = "xmlElement (fromString \"<a><b></b><c></c></a>\")",
+    fn   = \(__ : Unit) -> printFirstXMLResult (xmlElement (fromString "<a><b></b><c></c></a>"))
+};
+
+let testElementWithAttr : TestFn = {
+    name = "xmlElement (fromString \"<a href='/toosimple/sometimes/naive'>ha?haha!</a>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult (xmlElement (fromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"))
+};
+
+let testElementWithAttrWithChildren : TestFn = {
+    name = "xmlElement (fromString \"<a href='/toosimple/sometimes/naive'><b></b></a>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult (xmlElement (fromString "<a href='/toosimple/sometimes/naive'><b></b></a>"))
+};
+
+let testElementSimple2 : TestFn = {
+    name = "xmlElement (fromString \"<you young='too' simple='too'><naive>true</naive></you>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement
+                (fromString
+                    "<you young='too' simple='too'><naive>true</naive></you>"))
+};
+
+let testElementSimpleEndTag : TestFn = {
+    name = "xmlElement (fromString \"<a/>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult (xmlElement (fromString "<a/>"))
+};
+
+let testElementSimpleEndTag2 : TestFn = {
+    name = "xmlElement (fromString \"<you young='too' simple='too'><naive><required/></naive></you>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement
+                (fromString
+                    "<you young='too' simple='too'><naive><required/></naive></you>"))
+};
+
+let testElementSimpleEndTag3 : TestFn = {
+    name = "xmlElement (fromString \"<you young='too' simple='too'>\\n\\t<naive>\\n\\t\\t<required/>\\n\\t</naive>\\n</you>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement
+                (fromString
+                    "<you young='too' simple='too'>\n\t<naive>\n\t\t<required/>\n\t</naive>\n</you>"))
+};
+
+let testElementSimpleEndTag4 : TestFn = {
+    name = "xmlElement (fromString \"<a href='https://github.com/hkuplg/fcore'/>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult (xmlElement (fromString "<a href='https://github.com/hkuplg/fcore'/>"))
+};
+
+let testCDataSimple : TestFn = {
+    name = "xmlCData (fromString \"<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>\"",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlCData (fromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
+};
+
+let testElementWithCData : TestFn = {
+    name = "xmlElement (fromString \"<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>\"",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement (fromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
+};
+
+let testNaiveXMLParserSuite : TestSuite = {
+    name = "Test Naive XML Parser",
+    fns  = testXMLComment
+                +>[TestFn] (testXMLDoubleQuotedString
+                +>[TestFn] (testXMLSingleQuotedString
+                +>[TestFn] (testXMLText
+                +>[TestFn] (testXMLTextEmpty
+                +>[TestFn] (testXMLAttr
+                +>[TestFn] (testXMLAttrs
+                +>[TestFn] (testElementSimple
+                +>[TestFn] (testElementWithText
+                +>[TestFn] (testElementWithChildren
+                +>[TestFn] (testElementWithChildren2
+                +>[TestFn] (testElementWithAttr
+                +>[TestFn] (testElementWithAttrWithChildren
+                +>[TestFn] (testElementSimple2
+                +>[TestFn] (testElementSimpleEndTag
+                +>[TestFn] (testElementSimpleEndTag2
+                +>[TestFn] (testElementSimpleEndTag3
+                +>[TestFn] (testElementSimpleEndTag4
+                +>[TestFn] (testCDataSimple
+                +>[TestFn] (testElementWithCData
+                +>[TestFn] (Nil[TestFn]))))))))))))))))))))
+};
+
+let parserTestSuites : PList[TestSuite] =
+    testUtilitiesSuite
+        +>[TestSuite] (testCombinatorsSuite
+        +>[TestSuite] (testSimpleArithmetricExprSuite
+        +>[TestSuite] (testNaiveXMLParserSuite
+        +>[TestSuite] (Nil[TestSuite]))));
+
+{
+    runTestSuites parserTestSuites;
 
     "\n-- END --"
 }

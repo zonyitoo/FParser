@@ -430,14 +430,21 @@ let xmlQuotedString : Parser[PString] =
 let xmlText : Parser[XMLNode] =
     xmlString <$>[PString, XMLNode] (\(content : PString) -> XMLText content);
 
+let xmlCData : Parser[XMLNode] =
+    string (fromString "<![CDATA[")
+        *>[PString, PList[Char]] (many[Char] item)
+            <$>[PList[Char], XMLNode] (\(cd : PList[Char]) -> XMLCData cd)
+        <*[XMLNode, PString] (string (fromString "]]>"));
+
 let xmlKey : Parser[PString] =
     word;
 
 let xmlAttr : Parser[XMLNode] =
     bind[PString, XMLNode]  xmlKey                                                          (\(key : PString) ->
-    bind[Char, XMLNode]     (xmlSpace *>[Unit, Char] (char '=') <*[Char, Unit] xmlSpace)    (\(eq : Char) ->
-    bind[PString, XMLNode]  xmlQuotedString                                                 (\(val : PString) ->
-    result[XMLNode] (XMLAttr (key, val)))));
+    bind[PString, XMLNode]  (xmlSpace >>[Unit, Char] (char '=')
+                                      >>[Char, Unit] xmlSpace
+                                      >>[Unit, PString] xmlQuotedString)                    (\(val : PString) ->
+    result[XMLNode] (XMLAttr (key, val))));
 
 let xmlAttrs : Parser[PList[XMLNode]] =
     sepby[XMLNode, Unit] xmlAttr xmlSpace;
@@ -484,8 +491,9 @@ let rec xmlElement : Parser[XMLNode] =
                 >>[PString, XMLNode] (result[XMLNode] (XMLElement tag attrs (Nil[XMLNode]))))))
 
 and xmlElementChildren : Parser[PList[XMLNode]] =
-    choice[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
-                           (many1[XMLNode] xmlElement);
+    (many1[XMLNode] xmlCData)
+        <|>[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
+        <|>[PList[XMLNode]] (many1[XMLNode] xmlElement);
 
 let xmlNode : Parser[XMLNode] =
     xmlElement;
@@ -910,6 +918,20 @@ let testElementSimpleEndTag4 : TestFn = {
         printFirstXMLResult (xmlElement (fromString "<a href='https://github.com/hkuplg/fcore'/>"))
 };
 
+let testCDataSimple : TestFn = {
+    name = "xmlCData (fromString \"<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>\"",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlCData (fromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
+};
+
+let testElementWithCData : TestFn = {
+    name = "xmlElement (fromString \"<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>\"",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlElement (fromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
+};
+
 let testNaiveXMLParserSuite : TestSuite = {
     name = "Test Naive XML Parser",
     fns  = testXMLComment
@@ -930,7 +952,9 @@ let testNaiveXMLParserSuite : TestSuite = {
                 +>[TestFn] (testElementSimpleEndTag2
                 +>[TestFn] (testElementSimpleEndTag3
                 +>[TestFn] (testElementSimpleEndTag4
-                +>[TestFn] (Nil[TestFn]))))))))))))))))))
+                +>[TestFn] (testCDataSimple
+                +>[TestFn] (testElementWithCData
+                +>[TestFn] (Nil[TestFn]))))))))))))))))))))
 };
 
 let parserTestSuites : PList[TestSuite] =

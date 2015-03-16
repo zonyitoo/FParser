@@ -345,7 +345,7 @@ let lazychoice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
 -- Simple arithmetic expression
 
 let bracket[A, B, C] (open : Parser[A]) (p : Parser[B]) (close : Parser[C]) : Parser[B] =
-    open >>[A, B] p >>=[B, B] (\(x : B) -> close >>[C, B] (result[B] x));
+    open *>[A, B] p <*[B, C] close;
 
 let operation = {
     let addop (a : Int) (b : Int) : Int = a + b;
@@ -904,6 +904,12 @@ let testElementSimpleEndTag3 : TestFn = {
                     "<you young='too' simple='too'>\n\t<naive>\n\t\t<required/>\n\t</naive>\n</you>"))
 };
 
+let testElementSimpleEndTag4 : TestFn = {
+    name = "xmlElement (fromString \"<a href='https://github.com/hkuplg/fcore'/>\")",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult (xmlElement (fromString "<a href='https://github.com/hkuplg/fcore'/>"))
+};
+
 let testNaiveXMLParserSuite : TestSuite = {
     name = "Test Naive XML Parser",
     fns  = testXMLComment
@@ -923,7 +929,8 @@ let testNaiveXMLParserSuite : TestSuite = {
                 +>[TestFn] (testElementSimpleEndTag
                 +>[TestFn] (testElementSimpleEndTag2
                 +>[TestFn] (testElementSimpleEndTag3
-                +>[TestFn] (Nil[TestFn])))))))))))))))))
+                +>[TestFn] (testElementSimpleEndTag4
+                +>[TestFn] (Nil[TestFn]))))))))))))))))))
 };
 
 let parserTestSuites : PList[TestSuite] =

@@ -987,7 +987,14 @@ let testProcInst2 : TestFn = {
     name = "xmlProcInst (fromString \"<?xml-stylesheet ?>\"): ",
     fn   = \(__ : Unit) ->
         printFirstXMLResult
-            (xmlProcInst (fromString "<?xml-stylesheet?>"))
+            (xmlProcInst (fromString "<?xml-stylesheet ?>"))
+};
+
+let testProcInstPHP : TestFn = {
+    name = "xmlProcInst (fromString \"<?php why='I Love PHP'?>\"): ",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlProcInst (fromString "<?php why='I Love PHP'?>"))
 };
 
 let testNaiveXMLParserSuite : TestSuite = {
@@ -1014,7 +1021,8 @@ let testNaiveXMLParserSuite : TestSuite = {
                 +>[TestFn] (testElementWithCData
                 +>[TestFn] (testProcInst
                 +>[TestFn] (testProcInst2
-                +>[TestFn] (Nil[TestFn]))))))))))))))))))))))
+                +>[TestFn] (testProcInstPHP
+                +>[TestFn] (Nil[TestFn])))))))))))))))))))))))
 };
 
 let parserTestSuites : PList[TestSuite] =

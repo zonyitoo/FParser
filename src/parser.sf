@@ -110,35 +110,35 @@ let rec take[A] (n : Int) (l : PList[A]) : PList[A] =
             Nil         ->  Nil[A]
          |  Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (take[A] (n-1) (invoke[PList[A]] xs)));
 
-let listToString[A] (l : PList[A]) (tostr : A -> String) : String =
-    (let inner = foldl[String, String] (\(b : String) (a : String) -> b.concat(a))
-                                       ""
-                                       (join[String] (map[A, String] tostr l) ", ");
-     "[".concat(inner).concat("]"));
+let listToString[A] (l : PList[A]) (tostr : A -> String) : String = {
+    type StringBuilder = java.lang.StringBuilder;
 
---let listToString[A] (l : PList[A]) (tostr : A -> String) : String = {
---    type StringBuffer = java.lang.StringBuffer;
---
---    let inner = foldl[String, StringBuffer]
---                    (\(b : StringBuffer) (a : String) -> b.append(a))
---                    (new java.lang.StringBuffer("["))
---                    (join[String] (map[A, String] tostr l) ", ");
---
---    inner.append("]").toString()
---};
+    let inner = foldl[String, StringBuilder]
+                    (\(b : StringBuilder) (a : String) -> b.append(a))
+                    (new java.lang.StringBuilder("["))
+                    (join[String] (map[A, String] tostr l) ", ");
+
+    inner.append("]").toString()
+};
 
 -- ADT String
 
 type PString = PList[Char];
 
 let toString (l : PString) : String =
-    foldl[Char, String] (\(b : String) (a : Char) -> b.concat(a.toString())) "" l;
+    (foldl[Char, java.lang.StringBuilder]
+        (\(b : java.lang.StringBuilder) (a : Char) -> b.append(a))
+        (new java.lang.StringBuilder( ))
+        l).toString();
 
-let rec fromString (str : String) : PString =
-    if length(str) == 0 then
-        (Nil[Char])
-    else
-        (Cons[Char] str.charAt(0) (\(__ : Unit) -> (fromString str.substring(1))));
+let fromString (str : String) : PString = {
+    let rec inner (str : String) (idx : Int) : PString =
+        if idx == length(str) then
+            (Nil[Char])
+        else
+            (Cons[Char] str.charAt(idx) (\(__ : Unit) -> (inner str (idx+1))));
+    inner str 0
+};
 
 let rec charin (c : Char) (str : PString) : Bool =
     case str of
@@ -237,7 +237,10 @@ let alphanum : Parser[Char] =
     choice[Char] letter digit;
 
 let noneof (s : PString) : Parser[Char] =
-    sat (\(x : Char)  -> (charin x s) == False);
+    sat (\(x : Char) -> (charin x s) == False);
+
+let oneof (s : PString) : Parser[Char] =
+    sat (\(x : Char) -> charin x s);
 
 let rec string (s : PString) : Parser[PString] =
     case s of
@@ -276,6 +279,15 @@ let natural : Parser[Int] = {
                         (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 10)) xs);
 
     bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs))
+};
+
+let hexdecimal : Parser[Int] = {
+    let eval (xs : PList[Char]) =
+        foldl[Int, Int] (\(b : Int) (a : Int) -> 16 * b + a)
+                        0
+                        (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 16)) xs);
+    (many1[Char] (oneof (fromString "1234567890abcdefABCDEF")))
+        <$>[PList[Char], Int] (\(xs : PList[Char]) -> eval xs)
 };
 
 let int : Parser[Int] =
@@ -373,6 +385,7 @@ data XMLNode = XMLText      PString
              | XMLElement   PString PList[XMLNode] PList[XMLNode]
              | XMLCData     PString
              | XMLComment   PString
+             | XMLProcInst  PString PList[XMLNode]
              ;
 
 --let xmlComment : Parser[PList[Char]] =
@@ -412,11 +425,20 @@ let xmlEscapedChar : Parser[Char] = {
     quot `choice[Char]` apos `choice[Char]` lt `choice[Char]` gt `choice[Char]` amp
 };
 
+-- FIXME: Issue125
+let xmlEscapedCodePoint : Parser[PString] =
+    (string (fromString "&#x"))
+        *>[PString, Int] hexdecimal
+        <*[Int, Char] (char ';')
+--        <$>[Int, PString] (\(codep : Int) -> (fromString (new java.lang.String(java.lang.Character.toChars(codep)))));
+        <$>[Int, PString] (\(codep : Int) -> (fromString (new java.lang.String( ))));
+
 let xmlChar : Parser[Char] =
     xmlEscapedChar <|>[Char] (noneof (fromString "\"'<>&"));
 
 let xmlString : Parser[PString] =
     many[Char] xmlChar;
+--        <|>[PString] xmlEscapedCodePoint;
 
 let xmlDoubleQuotedString : Parser[PString] =
     (char '"') *>[Char, PString] xmlString <*[PString, Char] (char '"');
@@ -437,7 +459,7 @@ let xmlCData : Parser[XMLNode] =
         <*[XMLNode, PString] (string (fromString "]]>"));
 
 let xmlKey : Parser[PString] =
-    word;
+    many1[Char] (letter <|>[Char] (char '-'));
 
 let xmlAttr : Parser[XMLNode] =
     bind[PString, XMLNode]  xmlKey                                                          (\(key : PString) ->
@@ -495,8 +517,20 @@ and xmlElementChildren : Parser[PList[XMLNode]] =
         <|>[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
         <|>[PList[XMLNode]] (many1[XMLNode] xmlElement);
 
-let xmlNode : Parser[XMLNode] =
-    xmlElement;
+let xmlProcInst : Parser[XMLNode] =
+    (string (fromString "<?")) >>[PString, Unit] xmlSpace
+        >>[Unit, PString] xmlKey >>=[PString, XMLNode] (\(target : PString) ->
+            xmlSpace >>[Unit, PList[XMLNode]] xmlAttrs
+                <*[PList[XMLNode], PString] (xmlSpace >>[Unit, PString] (string (fromString "?>")))
+                    >>=[PList[XMLNode], XMLNode] (\(conts : PList[XMLNode]) ->
+                        result[XMLNode] (XMLProcInst target conts)));
+
+let parseXML : Parser[PList[XMLNode]] =
+    (many[XMLNode] xmlProcInst)
+        >>=[PList[XMLNode], PList[XMLNode]] (\(procinst1 : PList[XMLNode]) ->
+            xmlElement >>=[XMLNode, PList[XMLNode]] (\(root : XMLNode) ->
+                (many[XMLNode] xmlProcInst) >>=[PList[XMLNode], PList[XMLNode]] (\(procinst2 : PList[XMLNode]) ->
+                    result[PList[XMLNode]] (procinst1 @[XMLNode] (root +>[XMLNode] procinst2)))));
 
 
 -- Test
@@ -598,6 +632,10 @@ let rec xmlNodeToString (xml : XMLNode) : String =
      |  XMLComment str      -> "XMLComment ".concat(toString str)
      |  XMLAttr attr        -> "XMLAttr (".concat(toString attr._1).concat(", ").concat(toString attr._2).concat(")")
      |  XMLCData cdata      -> "XMLCData ".concat(toString cdata)
+     |  XMLProcInst t attrs
+            -> "XMLProcInst ".concat(toString t)
+                             .concat(" ")
+                             .concat(listToString[XMLNode] attrs xmlNodeToString)
      |  XMLElement tag attrs children
             -> "XMLElement ".concat(toString tag)
                             .concat(" ")
@@ -731,6 +769,11 @@ let testNatural : TestFn = {
     fn   = \(__ : Unit) -> printIntResult (natural (fromString "12345"))
 };
 
+let testHexDecimal : TestFn = {
+    name = "hexdecimal (fromString \"a0\")",
+    fn   = \(__ : Unit) -> printIntResult (hexdecimal (fromString "a0"))
+};
+
 let testSepby1 : TestFn = {
     name = "sepby1[PString, Char] word (char ',') (fromString \"abc,def\")",
     fn   = \(__ : Unit) ->
@@ -755,8 +798,9 @@ let testCombinatorsSuite : TestSuite = {
                 +>[TestFn] (testChoice2
                 +>[TestFn] (testWord
                 +>[TestFn] (testNatural
+                +>[TestFn] (testHexDecimal
                 +>[TestFn] (testSepby1
-                +>[TestFn] (Nil[TestFn])))))))))))
+                +>[TestFn] (Nil[TestFn]))))))))))))
 };
 
 -- Test Simple ARithmetic Expression Parser
@@ -932,6 +976,20 @@ let testElementWithCData : TestFn = {
             (xmlElement (fromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
 };
 
+let testProcInst : TestFn = {
+    name = "xmlProcInst (fromString \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?>\"): ",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlProcInst (fromString "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"))
+};
+
+let testProcInst2 : TestFn = {
+    name = "xmlProcInst (fromString \"<?xml-stylesheet ?>\"): ",
+    fn   = \(__ : Unit) ->
+        printFirstXMLResult
+            (xmlProcInst (fromString "<?xml-stylesheet?>"))
+};
+
 let testNaiveXMLParserSuite : TestSuite = {
     name = "Test Naive XML Parser",
     fns  = testXMLComment
@@ -954,7 +1012,9 @@ let testNaiveXMLParserSuite : TestSuite = {
                 +>[TestFn] (testElementSimpleEndTag4
                 +>[TestFn] (testCDataSimple
                 +>[TestFn] (testElementWithCData
-                +>[TestFn] (Nil[TestFn]))))))))))))))))))))
+                +>[TestFn] (testProcInst
+                +>[TestFn] (testProcInst2
+                +>[TestFn] (Nil[TestFn]))))))))))))))))))))))
 };
 
 let parserTestSuites : PList[TestSuite] =

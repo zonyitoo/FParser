@@ -1,7 +1,7 @@
 
 CODE_DIR := src
 
-.PHONE: all
+.PHONY: all
 all:
 	@$(MAKE) -C $(CODE_DIR)
 

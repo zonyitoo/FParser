@@ -77,13 +77,21 @@ let rec concat2[A] (a : PList[A]) (b : PList[A]) : PList[A] =
         Nil         ->  b
       | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (concat2[A] (invoke[PList[A]] xs) b));
 
-let (@)[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+let rec lazyconcat2[A] (a : PList[A]) (b : Thunk[PList[A]]) : PList[A] =
+    case a of
+        Nil         ->  (invoke[PList[A]] b)
+      | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (lazyconcat2[A] (invoke[PList[A]] xs) b));
+
+let (++)[A] (a : PList[A]) (b : PList[A]) : PList[A] =
     concat2[A] a b;
+
+let (+~)[A] (a : PList[A]) (b : Thunk[PList[A]]) : PList[A] =
+    lazyconcat2[A] a b;
 
 let rec concat[A] (l : PList[PList[A]]) : PList[A] =
     case l of
         Nil         ->  Nil[A]
-     |  Cons x xs   ->  concat2[A] x (concat[A] (invoke[PList[PList[A]]] xs));
+     |  Cons x xs   ->  x +~[A] (\(__ : Unit) -> (concat[A] (invoke[PList[PList[A]]] xs)));
 
 let rec len[A] (l : PList[A]) : Int =
     case l of
@@ -222,7 +230,7 @@ let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
 
 let choice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     \(inp : PString) ->
-        (p inp) @[(A, PString)] (q inp);
+        (p inp) +~[(A, PString)] (\(__ : Unit) -> q inp);
 
 let (<|>)[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
     choice[A] p q;
@@ -265,25 +273,26 @@ let oneof (s : PString) : Parser[Char] =
 
 let rec string (s : PString) : Parser[PString] =
     case s of
-        Nil         ->  result (Nil[Char])
-     |  Cons x xs   ->
-            (let xs = invoke[PString] xs;
-             bind[Char, PString]    (char x)    (\(dummy1 : Char) ->
-             bind[PString, PString] (string xs) (\(dummy2 : PString) ->
-             result[PString] (Cons[Char] x (\(__ : Unit) -> xs)))));
+        Nil         ->  result[PString] (Nil[Char])
+     |  Cons x xs   -> {
+            let xs = invoke[PString] xs;
+            (char x)
+                >>[Char, PString] (string xs)
+                $>[PString, PString] (x +>[Char] xs)
+     };
 
 -- Repetition
 
 let rec many[A] (p : Parser[A]) : Parser[PList[A]] =
     choice[PList[A]] (bind[A, PList[A]] p (\(x : A) ->
                       bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
-                      result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs)))))
+                      result[PList[A]] (x +>[A] xs))))
                      (result[PList[A]] (Nil[A]));
 
 let many1[A] (p : Parser[A]) : Parser[PList[A]] =
     bind[A, PList[A]] p (\(x : A) ->
     bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
-    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
+    result[PList[A]] (x +>[A] xs)));
 
 let word : Parser[PString] =
     many1[Char] letter;
@@ -291,7 +300,7 @@ let word : Parser[PString] =
 let ident : Parser[PString] =
     bind[Char, PString] lower (\(x : Char) ->
     bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
-    result[PString] (Cons[Char] x (\(__ : Unit) -> xs))));
+    result[PString] (x +>[Char] xs)));
 
 let natural : Parser[Int] = {
     let eval (xs : PList[Char]) =
@@ -370,10 +379,6 @@ let chainr[A] (p : Parser[A]) (op : Parser[A -> A -> A]) (v : A) : Parser[A] =
 
 let only[A] (p : Parser[A]) : Parser[A] =
     \(inp : PString) -> take[(A, PString)] 1 (p inp);
-
--- Lazy choice
-let lazychoice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
-    only[A] (choice[A] p q);
 
 -- Simple arithmetic expression
 
@@ -631,7 +636,7 @@ let parseXML : Parser[PList[XMLNode]] =
         >>=[PList[XMLNode], PList[XMLNode]] (\(procinst1 : PList[XMLNode]) ->
             xmlElement >>=[XMLNode, PList[XMLNode]] (\(root : XMLNode) ->
                 (many[XMLNode] xmlProcInst) >>=[PList[XMLNode], PList[XMLNode]] (\(procinst2 : PList[XMLNode]) ->
-                    result[PList[XMLNode]] (procinst1 @[XMLNode] (root +>[XMLNode] procinst2)))));
+                    result[PList[XMLNode]] (procinst1 ++[XMLNode] (root +>[XMLNode] procinst2)))));
 
 
 -- Test

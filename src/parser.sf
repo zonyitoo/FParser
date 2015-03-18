@@ -613,9 +613,9 @@ let rec xmlElement : Parser[XMLNode] =
                 >>[PString, XMLNode] (result[XMLNode] (XMLElement tag attrs (Nil[XMLNode]))))))
 
 and xmlElementChildren : Parser[PList[XMLNode]] =
-    ((many1[XMLNode] xmlCData)
+    (xmlCData <$>[XMLNode, PList[XMLNode]] (\(c : XMLNode) -> singleton[XMLNode] c)
         <|>[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
-        <|>[PList[XMLNode]] (many1[XMLNode] xmlElement))
+        <|>[PList[XMLNode]] (sepby1[XMLNode, Unit] xmlElement xmlSpace))
     <|>[PList[XMLNode]] (result[PList[XMLNode]] (Nil[XMLNode]));
 
 let xmlProcInst : Parser[XMLNode] =
@@ -650,7 +650,7 @@ type TestSuite = {
 };
 
 let runTest (test : TestFn) : Unit = {
-    let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m... ";
+    let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m\t";
     println testingPrefix.concat(test.name).concat(" :");
     test.fn ();
     println "\t...ok"
@@ -1215,7 +1215,7 @@ let testElementWithCData : TestFn = {
 };
 
 let testProcInst : TestFn = {
-    name = "xmlProcInst (fromString \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?>\"): ",
+    name = "xmlProcInst (fromString \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?>\")",
     fn   = \(__ : Unit) -> {
         let elem = XMLProcInst (fromString "xml")
                         ((XMLAttr (fromString "version") (fromString "1.0"))
@@ -1229,7 +1229,7 @@ let testProcInst : TestFn = {
 };
 
 let testProcInst2 : TestFn = {
-    name = "xmlProcInst (fromString \"<?xml-stylesheet ?>\"): ",
+    name = "xmlProcInst (fromString \"<?xml-stylesheet ?>\")",
     fn   = \(__ : Unit) -> {
         let elem = XMLProcInst (fromString "xml-stylesheet") (Nil[XMLNode]);
         assert (firstParseResultEqual[XMLNode]

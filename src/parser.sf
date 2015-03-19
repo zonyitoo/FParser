@@ -35,8 +35,8 @@ type State[S, A] = S -> (A, S);
 
 -- ADT List
 data PolyList[A] = Nil
-              | Cons A (Thunk[PolyList[A]])
-              ;
+                 | Cons A (Thunk[PolyList[A]])
+                 ;
 
 let rec nats (beg : Int) : PolyList[Int] =
     Cons[Int] beg (\(__ : Unit) -> nats (beg+1));
@@ -566,20 +566,19 @@ let xmlEscapedChar : Parser[Char] = {
     quot `choice[Char]` apos `choice[Char]` lt `choice[Char]` gt `choice[Char]` amp
 };
 
--- FIXME: Issue125
 let xmlEscapedCodePoint : Parser[PolyString] =
     (string (fromString "&#x"))
         *>[PolyString, Int] hexdecimal
         <*[Int, Char] (char ';')
---        <$>[Int, PolyString] (\(codep : Int) -> (fromString (new java.lang.String(java.lang.Character.toChars(codep)))));
-        <$>[Int, PolyString] (\(codep : Int) -> (fromString (new java.lang.String( ))));
+        <$>[Int, PolyString] (\(codep : Int) ->
+                (fromString (new java.lang.String(java.lang.Character.toChars(codep)))));
 
 let xmlChar : Parser[Char] =
     xmlEscapedChar <|>[Char] (noneof (fromString "\"'<>&"));
 
 let xmlString : Parser[PolyString] =
-    many1[Char] xmlChar;
---        <|>[PolyString] xmlEscapedCodePoint;
+    many1[Char] xmlChar
+       <|>[PolyString] xmlEscapedCodePoint;
 
 let xmlDoubleQuotedString : Parser[PolyString] =
     (char '"') *>[Char, PolyString] xmlString <*[PolyString, Char] (char '"');

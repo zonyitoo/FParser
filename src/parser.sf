@@ -297,6 +297,12 @@ let sourcePosCompare (p1 : SourcePos) (p2 : SourcePos) : Order =
                     else if col1 > col2 then GreaterThan
                     else Equals;
 
+let sourcePosEq (p1 : SourcePos) (p2 : SourcePos) : Bool =
+    case p1 `sourcePosCompare` p2 of
+        Equals      -> True
+     |  GreaterThan -> False
+     |  LessThan    -> False;
+
 -- Parse error
 data ParseError = ParseError SourcePos PList[Message];
 
@@ -342,52 +348,125 @@ let parseErrorToString (err : ParseError) : String =
                 .concat(":")
                 .concat(listToString[Message] messageToString msgs);
 
--- Parser type definition
+-- Parse Position
 
-type Parser[A] = PString -> PList[(A, PString)];
+type ParsePos = (SourcePos, SourcePos);
 
-let parseResultEq[A] (eq : Eq[A]) (a : (A, PString)) (b : (A, PString)): Bool =
-    (a._1 `eq` b._1) && (a._2 `polyStringEq` b._2);
+let parseBeginPos (p : ParsePos) : SourcePos =
+    p._1;
 
-let parseResultListEq[A] (eq : Eq[A]) (a : PList[(A, PString)]) (b : PList[(A, PString)]) : Bool =
-    polyListEq[(A, PString)]
-        (parseResultEq[A] eq)
-        a b;
+let parseEndPos (p : ParsePos) : SourcePos =
+    p._2;
 
-let parseResultToString[A] (str : A -> String) (res : (A, PString)) : String =
+let parsePosEq (a : ParsePos) (b : ParsePos) : Bool =
+    (a._1 `sourcePosEq` b._1) && (a._2 `sourcePosEq` b._2);
+
+let parsePosToString (a : ParsePos) : String =
+    (sourcePosToString a._1).concat("..").concat(sourcePosToString a._2);
+
+-- Parse Result
+
+type ParseResult[A] = (A, ParsePos);
+
+let parseResultValue[A] (r : ParseResult[A]) : A =
+    r._1;
+
+let parseResultPos[A] (r : ParseResult[A]) : ParsePos =
+    r._2;
+
+let parseResultEq[A] (eq : Eq[A]) (a : ParseResult[A]) (b : ParseResult[A]) : Bool =
+    (a._1 `eq` b._1) && (a._2 `parsePosEq` b._2);
+
+let parseResultToString[A] (str : Show[A]) (res : ParseResult[A]) : String =
     (new java.lang.StringBuilder("("))
         .append(str res._1)
-        .append(" ,\"")
-        .append(toString res._2)
+        .append(" ,")
+        .append(parsePosToString res._2)
+        .append(")")
+        .toString();
+
+-- Parse Context
+
+-- type ParseContext[A] = (ParseResult[A], PString);
+
+-- let parseContextResult[A] (c : ParseContext[A]) : ParseResult[A] =
+--     c._1;
+
+-- let parseContextRemaining[A] (c : ParseContext[A]) : PString =
+--     c._2;
+
+-- let parseContextEq[A] (eq : Eq[A]) (a : ParseContext[A]) (b : ParseContext[A]): Bool =
+--     (parseResultEq[A] eq a._1 b._1) && (a._2 `polyStringEq` b._2);
+
+-- let parseContextToString[A] (str : Show[A]) (c : ParseContext[A]) : String =
+--     (new java.lang.StringBuilder("("))
+--         .append(parseResultToString[A] str c._1)
+--         .append(", \"")
+--         .append(toString c._2)
+--         .append("\")")
+--         .toString();
+
+type ParseInput = PString;
+
+let parseInputData (inp : ParseInput) : PString =
+    inp;
+
+type ParseContext[A] = (A, ParseInput);
+
+let parseContextResult[A] (c : ParseContext[A]) : A =
+    c._1;
+
+let parseContextInput[A] (c : ParseContext[A]) : ParseInput =
+    c._2;
+
+let parseContextEq[A] (eq : Eq[A]) (a : ParseContext[A]) (b : ParseContext[A]): Bool =
+    (eq a._1 b._1) && (a._2 `polyStringEq` b._2);
+
+let parseContextToString[A] (str : Show[A]) (c : ParseContext[A]) : String =
+    (new java.lang.StringBuilder("("))
+        .append(str c._1)
+        .append(", \"")
+        .append(toString c._2)
         .append("\")")
         .toString();
 
-let parseResultListToString[A] (str : A -> String) (res : PList[(A, PString)]) : String =
-    listToString[(A, PString)]
-        (parseResultToString[A] str)
+-- Parser type definition
+
+type ParseOutput[A] = PList[ParseContext[A]];
+
+let parseOutputEq[A] (eq : Eq[A]) (a : ParseOutput[A]) (b : ParseOutput[A]) : Bool =
+    polyListEq[ParseContext[A]]
+        (parseContextEq[A] eq)
+        a b;
+
+let parseOutputToString[A] (str : Show[A]) (res : ParseOutput[A]) : String =
+    listToString[ParseContext[A]]
+        (parseContextToString[A] str)
         res;
+
+type Parser[A] = ParseInput -> ParseOutput[A];
 
 -- Primitive Parsers
 
 let result[V] (value : V) : Parser[V] =
-    \(inp : PString) -> singleton[(V, PString)] (value, inp);
+    \(inp : ParseInput) -> singleton[ParseContext[V]] (value, inp);
 
 let zero[V] : Parser[V] =
-    \(inp : PString) -> Nil[(V, PString)];
+    \(inp : ParseInput) -> Nil[ParseContext[V]];
 
 let item : Parser[Char] =
-    \(inp : PString) ->
-        case inp of
+    \(inp : ParseInput) ->
+        case parseInputData inp of
             Nil         ->      Nil[(Char, PString)]
           | Cons c xs   ->      singleton[(Char, PString)] (c, (invoke[PString] xs));
 
 -- Combinators
 
 let bind[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
-    \(inp : PString) ->
-        concat[(B, PString)]
-              (map[(A, PString), PList[(B, PString)]]
-                  (\(v : (A, PString)) -> f v._1 v._2) (p inp));
+    \(inp : ParseInput) ->
+        concat[ParseContext[B]]
+              (map[ParseContext[A], ParseOutput[B]]
+                  (\(v : ParseContext[A]) -> f (parseContextResult[A] v) (parseContextInput[A] v)) (p inp));
 
 let (>>=)[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
     bind[A, B] p f;
@@ -418,7 +497,7 @@ let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
     result[(A, B)] (x, y)));
 
 let choice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
-    \(inp : PString) ->
+    \(inp : ParseInput) ->
         (p inp) +~[(A, PString)] (\(__ : Unit) -> q inp);
 
 let (<|>)[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
@@ -476,8 +555,8 @@ let eol : Parser[Unit] =
         <|>[Unit] ((char '\n')    $>[Char, Unit] ());
 
 let eof : Parser[Unit] =
-    \(inp : PString) ->
-        case inp of
+    \(inp : ParseInput) ->
+        case parseInputData inp of
             Nil         -> singleton[(Unit, PString)] ((), inp)
          |  Cons _ _    -> (Nil[(Unit, PString)]);
 
@@ -587,13 +666,13 @@ let brackets[P] (p : Parser[P]) : Parser[P] =
 
 -- Pick the first (if exists) result
 --let only[A] (p : Parser[A]) : Parser[A] =
---    \(inp : PString) ->
+--    \(inp : ParseInput) ->
 --        case (p inp) of
 --            Nil         -> (Nil[(A, PString)])
 --         |  Cons x xs   -> (singleton[(A, PString)] x);
 
 let only[A] (p : Parser[A]) : Parser[A] =
-    \(inp : PString) -> take[(A, PString)] 1 (p inp);
+    \(inp : ParseInput) -> take[(A, PString)] 1 (p inp);
 
 -- Simple arithmetic expression
 
@@ -986,7 +1065,7 @@ let testUtilitiesSuite : TestSuite = {
 
 let testChar : TestFn = {
     name = "char 'a' (fromString \"abcd\")",
-    fn   = \(__ : Unit) -> assert (parseResultListEq[Char]
+    fn   = \(__ : Unit) -> assert (parseOutputEq[Char]
                                       charEq
                                       (char 'a' (fromString "abcd"))
                                       (singleton[(Char, PString)] ('a', (fromString "bcd"))))
@@ -994,7 +1073,7 @@ let testChar : TestFn = {
 
 let testUpper : TestFn = {
     name = "upper (fromString \"ABC\")",
-    fn   = \(__ : Unit) -> assert (parseResultListEq[Char]
+    fn   = \(__ : Unit) -> assert (parseOutputEq[Char]
                                       charEq
                                       (upper (fromString "ABC"))
                                       (singleton[(Char, PString)] ('A', (fromString "BC"))))
@@ -1002,7 +1081,7 @@ let testUpper : TestFn = {
 
 let testLetter : TestFn = {
     name = "letter (fromString \"abcd\")",
-    fn   = \(__ : Unit) -> assert (parseResultListEq[Char]
+    fn   = \(__ : Unit) -> assert (parseOutputEq[Char]
                                       charEq
                                       (letter (fromString "abcd"))
                                       (singleton[(Char, PString)] ('a', (fromString "bcd"))))
@@ -1010,7 +1089,7 @@ let testLetter : TestFn = {
 
 let testString : TestFn = {
     name = "string (fromString \"abc\") (fromString \"abcd\")",
-    fn   = \(__ : Unit) -> assert (parseResultListEq[PString]
+    fn   = \(__ : Unit) -> assert (parseOutputEq[PString]
                                         polyStringEq
                                         (string (fromString "abc") (fromString "abcd"))
                                         (singleton[(PString, PString)] ((fromString "abc"), (fromString "d"))))
@@ -1024,7 +1103,7 @@ let testMany : TestFn = {
             +>[(PString, PString)] ((fromString "a", fromString "aab")
             +>[(PString, PString)] ((fromString "", fromString "aaab")
             +>[(PString, PString)] (Nil[(PString, PString)]))));
-        assert (parseResultListEq[PString]
+        assert (parseOutputEq[PString]
                     polyStringEq
                     (many[Char] (char 'a') (fromString "aaab"))
                     expected)
@@ -1038,7 +1117,7 @@ let testMany1 : TestFn = {
             +>[(PString, PString)] ((fromString "aa", fromString "ab")
             +>[(PString, PString)] ((fromString "a", fromString "aab")
             +>[(PString, PString)] (Nil[(PString, PString)])));
-        assert (parseResultListEq[PString]
+        assert (parseOutputEq[PString]
                     polyStringEq
                     (many1[Char] (char 'a') (fromString "aaab"))
                     expected)
@@ -1048,7 +1127,7 @@ let testMany1 : TestFn = {
 let testChoice : TestFn = {
     name = "choice (char 'a') (char 'b') (fromString \"aaab\")",
     fn   = \(__ : Unit) ->
-        assert (parseResultListEq[Char]
+        assert (parseOutputEq[Char]
                     charEq
                     (choice[Char] (char 'a') (char 'b') (fromString "aaab"))
                     (singleton[(Char, PString)] ('a', fromString "aab")))
@@ -1061,7 +1140,7 @@ let testChoice2 : TestFn = {
             +>[(PString, PString)] ((fromString "aaa", fromString "b")
             +>[(PString, PString)] (Nil[(PString, PString)]));
 
-        assert (parseResultListEq[PString]
+        assert (parseOutputEq[PString]
                     polyStringEq
                     (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"))
                     expected)
@@ -1078,7 +1157,7 @@ let testWord : TestFn = {
             +>[(PString, PString)] ((fromString "aa", fromString "abcd abcd")
             +>[(PString, PString)] ((fromString "a", fromString "aabcd abcd")
             +>[(PString, PString)] (Nil[(PString, PString)]))))));
-        assert (parseResultListEq[PString]
+        assert (parseOutputEq[PString]
                     polyStringEq
                     (word (fromString "aaabcd abcd"))
                     expected)
@@ -1095,7 +1174,7 @@ let testNatural : TestFn = {
             +>[(Int, PString)] ((1, fromString "2345")
             +>[(Int, PString)] (Nil[(Int, PString)])))));
 
-        assert (parseResultListEq[Int]
+        assert (parseOutputEq[Int]
                     intEq
                     (natural (fromString "12345"))
                     expected)
@@ -1520,19 +1599,19 @@ let parserTestSuites : PList[TestSuite] =
 {
     runTestSuites parserTestSuites;
 
-    println (parseResultListToString[F2JToken]
+    println (parseOutputToString[F2JToken]
                 f2jTokenToString
                 (f2jComment (fromString "-- abchahaha")));
 
-    println (parseResultListToString[F2JToken]
+    println (parseOutputToString[F2JToken]
                 f2jTokenToString
                 (f2jComment (fromString "-- abchahaha\n-- second line\nnormal")));
 
-    println (parseResultListToString[F2JToken]
+    println (parseOutputToString[F2JToken]
                 f2jTokenToString
                 (f2jComment (fromString "{- abchahaha -}")));
 
-    println (parseResultListToString[Unit]
+    println (parseOutputToString[Unit]
                 unitToString
                 (eol (fromString "\nabcde")));
 

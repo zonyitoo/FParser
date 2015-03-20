@@ -411,6 +411,9 @@ type ParseInput = PString;
 let parseInputData (inp : ParseInput) : PString =
     inp;
 
+let parseInputInit (src : PString) : ParseInput =
+    src;
+
 type ParseContext[A] = (A, ParseInput);
 
 let parseContextResult[A] (c : ParseContext[A]) : A =
@@ -445,6 +448,9 @@ let parseOutputToString[A] (str : Show[A]) (res : ParseOutput[A]) : String =
         res;
 
 type Parser[A] = ParseInput -> ParseOutput[A];
+
+let parse[A] (p : Parser[A]) (src : PString) : ParseOutput[A] =
+    p (parseInputInit src);
 
 -- Primitive Parsers
 
@@ -1067,7 +1073,7 @@ let testChar : TestFn = {
     name = "char 'a' (fromString \"abcd\")",
     fn   = \(__ : Unit) -> assert (parseOutputEq[Char]
                                       charEq
-                                      (char 'a' (fromString "abcd"))
+                                      (char 'a' `parse[Char]` (fromString "abcd"))
                                       (singleton[(Char, PString)] ('a', (fromString "bcd"))))
 };
 
@@ -1075,7 +1081,7 @@ let testUpper : TestFn = {
     name = "upper (fromString \"ABC\")",
     fn   = \(__ : Unit) -> assert (parseOutputEq[Char]
                                       charEq
-                                      (upper (fromString "ABC"))
+                                      (upper `parse[Char]` (fromString "ABC"))
                                       (singleton[(Char, PString)] ('A', (fromString "BC"))))
 };
 
@@ -1083,7 +1089,7 @@ let testLetter : TestFn = {
     name = "letter (fromString \"abcd\")",
     fn   = \(__ : Unit) -> assert (parseOutputEq[Char]
                                       charEq
-                                      (letter (fromString "abcd"))
+                                      (letter `parse[Char]` (fromString "abcd"))
                                       (singleton[(Char, PString)] ('a', (fromString "bcd"))))
 };
 
@@ -1091,7 +1097,7 @@ let testString : TestFn = {
     name = "string (fromString \"abc\") (fromString \"abcd\")",
     fn   = \(__ : Unit) -> assert (parseOutputEq[PString]
                                         polyStringEq
-                                        (string (fromString "abc") (fromString "abcd"))
+                                        (string (fromString "abc") `parse[PString]` (fromString "abcd"))
                                         (singleton[(PString, PString)] ((fromString "abc"), (fromString "d"))))
 };
 
@@ -1105,7 +1111,7 @@ let testMany : TestFn = {
             +>[(PString, PString)] (Nil[(PString, PString)]))));
         assert (parseOutputEq[PString]
                     polyStringEq
-                    (many[Char] (char 'a') (fromString "aaab"))
+                    (many[Char] (char 'a') `parse[PString]` (fromString "aaab"))
                     expected)
     }
 };
@@ -1119,7 +1125,7 @@ let testMany1 : TestFn = {
             +>[(PString, PString)] (Nil[(PString, PString)])));
         assert (parseOutputEq[PString]
                     polyStringEq
-                    (many1[Char] (char 'a') (fromString "aaab"))
+                    (many1[Char] (char 'a') `parse[PString]` (fromString "aaab"))
                     expected)
     }
 };
@@ -1129,7 +1135,7 @@ let testChoice : TestFn = {
     fn   = \(__ : Unit) ->
         assert (parseOutputEq[Char]
                     charEq
-                    (choice[Char] (char 'a') (char 'b') (fromString "aaab"))
+                    (choice[Char] (char 'a') (char 'b') `parse[Char]` (fromString "aaab"))
                     (singleton[(Char, PString)] ('a', fromString "aab")))
 };
 
@@ -1142,7 +1148,8 @@ let testChoice2 : TestFn = {
 
         assert (parseOutputEq[PString]
                     polyStringEq
-                    (choice[PString] (string (fromString "aa")) (string (fromString "aaa")) (fromString "aaab"))
+                    (choice[PString] (string (fromString "aa")) (string (fromString "aaa"))
+                        `parse[PString]` (fromString "aaab"))
                     expected)
     }
 };
@@ -1159,7 +1166,7 @@ let testWord : TestFn = {
             +>[(PString, PString)] (Nil[(PString, PString)]))))));
         assert (parseOutputEq[PString]
                     polyStringEq
-                    (word (fromString "aaabcd abcd"))
+                    (word `parse[PString]` (fromString "aaabcd abcd"))
                     expected)
     }
 };
@@ -1176,7 +1183,7 @@ let testNatural : TestFn = {
 
         assert (parseOutputEq[Int]
                     intEq
-                    (natural (fromString "12345"))
+                    (natural `parse[Int]` (fromString "12345"))
                     expected)
     }
 };
@@ -1186,7 +1193,7 @@ let testHexDecimal : TestFn = {
     fn   = \(__ : Unit) ->
          assert (firstParseResultEqual[Int]
                     intEq
-                    (hexdecimal (fromString "a0"))
+                    (hexdecimal `parse[Int]` (fromString "a0"))
                     (160, fromString ""))
 };
 
@@ -1195,7 +1202,7 @@ let testSepby1 : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[PList[PString]]
                     (polyListEq[PString] polyStringEq)
-                    (sepby1[PString, Char] (word) (char ',') (fromString "abc,def"))
+                    (sepby1[PString, Char] (word) (char ',') `parse[PList[PString]]` (fromString "abc,def"))
                     ((fromString "abc") +>[PString] ((fromString "def") +>[PString] (Nil[PString])),
                      (fromString "")))
 };
@@ -1205,7 +1212,7 @@ let testNoneOf : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Char]
                     charEq
-                    (noneof (fromString "abc") (fromString "dce"))
+                    (noneof (fromString "abc") `parse[Char]` (fromString "dce"))
                     ('d', fromString "ce"))
 };
 
@@ -1233,7 +1240,7 @@ let testSimpleExpr : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Int]
                     intEq
-                    (expr (fromString "123"))
+                    (expr `parse[Int]` (fromString "123"))
                     (123, fromString ""))
 };
 
@@ -1242,7 +1249,7 @@ let testSimpleExprWithBracket : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Int]
                     intEq
-                    (expr (fromString "(123)"))
+                    (expr `parse[Int]` (fromString "(123)"))
                     (123, fromString ""))
 };
 
@@ -1251,7 +1258,7 @@ let testSimpleExpr2 : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Int]
                     intEq
-                    (expr (fromString "1+2"))
+                    (expr `parse[Int]` (fromString "1+2"))
                     (3, fromString ""))
 };
 
@@ -1260,7 +1267,7 @@ let testSimpleExpr3 : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Int]
                     intEq
-                    (expr (fromString "10+2"))
+                    (expr `parse[Int]` (fromString "10+2"))
                     (12, fromString ""))
 };
 
@@ -1269,7 +1276,7 @@ let testSimpleExpr4 : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Int]
                     intEq
-                    (expr (fromString "(10+2)*2"))
+                    (expr `parse[Int]` (fromString "(10+2)*2"))
                     (24, fromString ""))
 };
 
@@ -1278,7 +1285,7 @@ let testSimpleExpr5 : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[Int]
                     intEq
-                    (expr (fromString "(10+2)*2/6"))
+                    (expr `parse[Int]` (fromString "(10+2)*2/6"))
                     (4, fromString ""))
 };
 
@@ -1300,7 +1307,7 @@ let testXMLComment : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlComment (fromString "<!-- hahaa? -->"))
+                    (xmlComment `parse[XMLNode]` (fromString "<!-- hahaa? -->"))
                     ((XMLComment (fromString " hahaa? ")), fromString ""))
 };
 
@@ -1309,7 +1316,7 @@ let testXMLDoubleQuotedString : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[PString]
                     polyStringEq
-                    (xmlDoubleQuotedString (fromString "\"abcdef\""))
+                    (xmlDoubleQuotedString `parse[PString]` (fromString "\"abcdef\""))
                     (fromString "abcdef", fromString ""))
 };
 
@@ -1318,7 +1325,7 @@ let testXMLSingleQuotedString : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[PString]
                     polyStringEq
-                    (xmlSingleQuotedString (fromString "'abcdef'"))
+                    (xmlSingleQuotedString `parse[PString]` (fromString "'abcdef'"))
                     ((fromString "abcdef"), (fromString "")))
 };
 
@@ -1327,14 +1334,14 @@ let testXMLText : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlText (fromString "abcdefg&lt;hijk"))
+                    (xmlText `parse[XMLNode]` (fromString "abcdefg&lt;hijk"))
                     (XMLText (fromString "abcdefg<hijk"), fromString ""))
 };
 
 let testXMLTextEmpty : TestFn = {
     name = "xmlText (fromString \"\")",
     fn   = \(__ : Unit) ->
-        assert (isempty[(XMLNode, PString)] (xmlText (fromString "")))
+        assert (isempty[ParseContext[XMLNode]] (xmlText `parse[XMLNode]` (fromString "")))
 };
 
 let testXMLAttr : TestFn = {
@@ -1342,7 +1349,7 @@ let testXMLAttr : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlAttr (fromString "key = \"vvvalue\""))
+                    (xmlAttr `parse[XMLNode]` (fromString "key = \"vvvalue\""))
                     (XMLAttr (fromString "key") (fromString "vvvalue"), fromString ""))
 };
 
@@ -1351,7 +1358,7 @@ let testXMLAttrs : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[PList[XMLNode]]
                     (polyListEq[XMLNode] xmlNodeEqual)
-                    (xmlAttrs (fromString "key = \"vvvalue\" hello = \"world\" haha='what?'"))
+                    (xmlAttrs `parse[PList[XMLNode]]` (fromString "key = \"vvvalue\" hello = \"world\" haha='what?'"))
                     ((XMLAttr (fromString "key") (fromString "vvvalue"))
                         +>[XMLNode] ((XMLAttr (fromString "hello") (fromString "world"))
                         +>[XMLNode] ((XMLAttr (fromString "haha") (fromString "what?"))
@@ -1364,7 +1371,7 @@ let testElementSimple : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a></a>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a></a>"))
                     (XMLElement (fromString "a") (Nil[XMLNode]) (Nil[XMLNode]), fromString ""))
 };
 
@@ -1373,7 +1380,7 @@ let testElementWithText : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a>ha?haha!</a>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a>ha?haha!</a>"))
                     (XMLElement (fromString "a") (Nil[XMLNode]) (singleton[XMLNode] (XMLText (fromString "ha?haha!"))),
                      fromString ""))
 };
@@ -1383,7 +1390,7 @@ let testElementWithChildren : TestFn = {
     fn   = \(__ : Unit) ->
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a><b></b></a>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a><b></b></a>"))
                     (XMLElement (fromString "a") (Nil[XMLNode])
                         (singleton[XMLNode] (XMLElement (fromString "b") (Nil[XMLNode]) (Nil[XMLNode]))),
                      fromString ""))
@@ -1397,7 +1404,7 @@ let testElementWithChildren2 : TestFn = {
         let a = XMLElement (fromString "a") (Nil[XMLNode]) (b +>[XMLNode] (c +>[XMLNode] (Nil[XMLNode])));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a><b></b><c></c></a>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a><b></b><c></c></a>"))
                     (a, fromString ""))
     }
 };
@@ -1411,7 +1418,7 @@ let testElementWithAttr : TestFn = {
                         (singleton[XMLNode] (XMLText (fromString "ha?haha!")));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"))
                     (elem, fromString ""))
     }
 };
@@ -1425,7 +1432,7 @@ let testElementWithAttrWithChildren : TestFn = {
                         (singleton[XMLNode] (XMLElement (fromString "b") (Nil[XMLNode]) (Nil[XMLNode])));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a href='/toosimple/sometimes/naive'><b></b></a>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a href='/toosimple/sometimes/naive'><b></b></a>"))
                     (elem, fromString ""))
     }
 };
@@ -1442,7 +1449,7 @@ let testElementSimple2 : TestFn = {
                             (singleton[XMLNode] (XMLText (fromString "true")))));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement
+                    (xmlElement `parse[XMLNode]`
                         (fromString
                             "<you young='too' simple='too'><naive>true</naive></you>"))
                     (elem, fromString ""))
@@ -1455,7 +1462,7 @@ let testElementSimpleEndTag : TestFn = {
         let elem = XMLElement (fromString "a") (Nil[XMLNode]) (Nil[XMLNode]);
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a/>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a/>"))
                     (elem, fromString ""))
     }
 };
@@ -1472,7 +1479,7 @@ let testElementSimpleEndTag2 : TestFn = {
                             (singleton[XMLNode] (XMLElement (fromString "required") (Nil[XMLNode]) (Nil[XMLNode])))));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement
+                    (xmlElement `parse[XMLNode]`
                         (fromString
                             "<you young='too' simple='too'><naive><required/></naive></you>"))
                     (elem, fromString ""))
@@ -1492,7 +1499,7 @@ let testElementSimpleEndTag3 : TestFn = {
 
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement
+                    (xmlElement `parse[XMLNode]`
                         (fromString
                             "<you young='too' simple='too'>\n\t<naive>\n\t\t<required/>\n\t</naive>\n</you>"))
                     (elem, fromString ""))
@@ -1509,7 +1516,7 @@ let testElementSimpleEndTag4 : TestFn = {
                         (Nil[XMLNode]);
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<a href='https://github.com/hkuplg/fcore'/>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<a href='https://github.com/hkuplg/fcore'/>"))
                     (elem, fromString ""))
     }
 };
@@ -1520,7 +1527,7 @@ let testCDataSimple : TestFn = {
         let elem = XMLCData (fromString "function matchwo(a,b) { if (a < b && a < 0) then }");
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlCData (fromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
+                    (xmlCData `parse[XMLNode]` (fromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
                     (elem, fromString ""))
     }
 };
@@ -1532,7 +1539,7 @@ let testElementWithCData : TestFn = {
                         (singleton[XMLNode] (XMLCData (fromString "function matchwo(a,b) { &&<>!!!?; }")));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlElement (fromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
+                    (xmlElement `parse[XMLNode]` (fromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
                     (elem, fromString ""))
     }
 };
@@ -1546,7 +1553,7 @@ let testProcInst : TestFn = {
                             +>[XMLNode] (Nil[XMLNode])));
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlProcInst (fromString "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"))
+                    (xmlProcInst `parse[XMLNode]` (fromString "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"))
                     (elem, fromString ""))
     }
 };
@@ -1557,7 +1564,7 @@ let testProcInst2 : TestFn = {
         let elem = XMLProcInst (fromString "xml-stylesheet") (Nil[XMLNode]);
         assert (firstParseResultEqual[XMLNode]
                     xmlNodeEqual
-                    (xmlProcInst (fromString "<?xml-stylesheet ?>"))
+                    (xmlProcInst `parse[XMLNode]` (fromString "<?xml-stylesheet ?>"))
                     (elem, fromString ""))
     }
 };
@@ -1601,19 +1608,19 @@ let parserTestSuites : PList[TestSuite] =
 
     println (parseOutputToString[F2JToken]
                 f2jTokenToString
-                (f2jComment (fromString "-- abchahaha")));
+                (f2jComment `parse[F2JToken]` (fromString "-- abchahaha")));
 
     println (parseOutputToString[F2JToken]
                 f2jTokenToString
-                (f2jComment (fromString "-- abchahaha\n-- second line\nnormal")));
+                (f2jComment `parse[F2JToken]` (fromString "-- abchahaha\n-- second line\nnormal")));
 
     println (parseOutputToString[F2JToken]
                 f2jTokenToString
-                (f2jComment (fromString "{- abchahaha -}")));
+                (f2jComment `parse[F2JToken]` (fromString "{- abchahaha -}")));
 
     println (parseOutputToString[Unit]
                 unitToString
-                (eol (fromString "\nabcde")));
+                (eol `parse[Unit]` (fromString "\nabcde")));
 
     "\n-- END --"
 }

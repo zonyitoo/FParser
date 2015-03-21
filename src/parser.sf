@@ -480,11 +480,17 @@ let parseOutputToString[A] (str : Show[A]) (res : ParseOutput[A]) : String =
 
 type Parser[A] = ParseInput -> ParseOutput[A];
 
-let parse[A] (p : Parser[A]) (src : PString) : ParseOutput[A] =
+let parseString[A] (p : Parser[A]) (src : String) : ParseOutput[A] =
+    p (parseInputInit (pStringFromString src));
+
+let parsePString[A] (p : Parser[A]) (src : PString) : ParseOutput[A] =
     p (parseInputInit src);
 
-let parseWithName[A] (p : Parser[A]) (name : String) (src : PString) : ParseOutput[A] =
+let parsePStringWithName[A] (p : Parser[A]) (name : String) (src : PString) : ParseOutput[A] =
     p (parseInputInitWithName name src);
+
+let parseStringWithName[A] (p : Parser[A]) (name : String) (src : String) : ParseOutput[A] =
+    p (parseInputInitWithName name (pStringFromString src));
 
 -- Primitive Parsers
 
@@ -574,24 +580,26 @@ let letter : Parser[Char] =
 let alphanum : Parser[Char] =
     choice[Char] letter digit;
 
-let noneof (s : PString) : Parser[Char] =
-    sat (\(x : Char) -> (charin x s) `boolEq` False);
+let noneof (s : String) : Parser[Char] =
+    sat (\(x : Char) -> (charin x (pStringFromString s)) `boolEq` False);
 
-let oneof (s : PString) : Parser[Char] =
-    sat (\(x : Char) -> charin x s);
+let oneof (s : String) : Parser[Char] =
+    sat (\(x : Char) -> (charin x (pStringFromString s)));
 
-let rec string (s : PString) : Parser[PString] =
+let rec stringWithPString (s : PString) : Parser[PString] =
     case s of
         Nil         ->  result[PString] (Nil[Char])
-     |  Cons x xs   -> {
+     |  Cons x xs   ->
             let xs = invoke[PString] xs;
             (char x)
-                >>[Char, PString] (string xs)
-                $>[PString, PString] (x +>[Char] xs)
-     };
+                >>[Char, PString] (stringWithPString xs)
+                $>[PString, PString] (x +>[Char] xs);
+
+let string (s : String) : Parser[PString] =
+    stringWithPString (pStringFromString s);
 
 let eol : Parser[Unit] =
-    ((string (pStringFromString "\r\n")) $>[PString, Unit] ())
+    ((string "\r\n") $>[PString, Unit] ())
         <|>[Unit] ((char '\r')    $>[Char, Unit] ())
         <|>[Unit] ((char '\n')    $>[Char, Unit] ());
 
@@ -636,7 +644,7 @@ let hexdecimal : Parser[Int] = {
         foldl[Int, Int] (\(b : Int) (a : Int) -> 16 * b + a)
                         0
                         (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 16)) xs);
-    (many1[Char] (oneof (pStringFromString "1234567890abcdefABCDEF")))
+    (many1[Char] (oneof "1234567890abcdefABCDEF"))
         <$>[PList[Char], Int] (\(xs : PList[Char]) -> eval xs)
 };
 
@@ -834,9 +842,9 @@ let rec xmlNodeToString (xml : XMLNode) : String =
 --    result[PList[Char]] comment)));
 
 let xmlComment : Parser[XMLNode] =
-    (string (pStringFromString "<!--"))
+    (string "<!--")
         *>[PString, PList[Char]] (many[Char] item)
-        <*[PList[Char], PString] (string (pStringFromString "-->"))
+        <*[PList[Char], PString] (string "-->")
         <$>[PList[Char], XMLNode] (\(cmt : PList[Char]) -> XMLComment (pStringToString cmt));
 
 --let xmlSpace : Parser[Unit] =
@@ -856,23 +864,23 @@ let xmlSpace : Parser[Unit] =
 
 -- Normal version
 let xmlEscapedChar : Parser[Char] =
-    let quot = (string (pStringFromString "&quot;")) $>[PString, Char] '"';
-    let apos = (string (pStringFromString "&apos;")) $>[PString, Char] '\'';
-    let lt = (string (pStringFromString "&lt;"))     $>[PString, Char] '<';
-    let gt = (string (pStringFromString "&gt;"))     $>[PString, Char] '>';
-    let amp = (string (pStringFromString "&amp;"))   $>[PString, Char] '&';
+    let quot = (string "&quot;") $>[PString, Char] '"';
+    let apos = (string "&apos;") $>[PString, Char] '\'';
+    let lt = (string "&lt;")     $>[PString, Char] '<';
+    let gt = (string "&gt;")     $>[PString, Char] '>';
+    let amp = (string "&amp;")   $>[PString, Char] '&';
 
     quot `choice[Char]` apos `choice[Char]` lt `choice[Char]` gt `choice[Char]` amp;
 
 let xmlEscapedCodePoint : Parser[PString] =
-    (string (pStringFromString "&#x"))
+    (string "&#x")
         *>[PString, Int] hexdecimal
         <*[Int, Char] (char ';')
         <$>[Int, PString] (\(codep : Int) ->
                 (pStringFromString (new java.lang.String(java.lang.Character.toChars(codep)))));
 
 let xmlChar : Parser[Char] =
-    xmlEscapedChar <|>[Char] (noneof (pStringFromString "\"'<>&"));
+    xmlEscapedChar <|>[Char] (noneof "\"'<>&");
 
 let xmlString : Parser[PString] =
     many1[Char] xmlChar
@@ -891,10 +899,10 @@ let xmlText : Parser[XMLNode] =
     xmlString <$>[PString, XMLNode] (\(content : PString) -> XMLText (pStringToString content));
 
 let xmlCData : Parser[XMLNode] =
-    string (pStringFromString "<![CDATA[")
+    string "<![CDATA["
         *>[PString, PList[Char]] (many[Char] item)
             <$>[PList[Char], XMLNode] (\(cd : PList[Char]) -> XMLCData (pStringToString cd))
-        <*[XMLNode, PString] (string (pStringFromString "]]>"));
+        <*[XMLNode, PString] (string "]]>");
 
 let xmlKey : Parser[PString] =
     many1[Char] (letter <|>[Char] (char '-'));
@@ -910,12 +918,12 @@ let xmlAttrs : Parser[PList[XMLNode]] =
     sepby[XMLNode, Unit] xmlAttr xmlSpace;
 
 let xmlEndTag (tag : PString) : Parser[Unit] =
-    (string (pStringFromString "</"))
+    (string "</")
         >>[PString, Unit]   xmlSpace
-        >>[Unit, PString]   (string tag)
+        >>[Unit, PString]   (stringWithPString tag)
         >>[PString, Unit]   xmlSpace
-        >>[Unit, Char]         (char '>')
-        $>[Char, Unit]         ();
+        >>[Unit, Char]      (char '>')
+        $>[Char, Unit]      ();
 
 --let rec xmlElement : Parser[XMLNode] =
 --    bind[Char, XMLNode]             (char '<')                                  (\(__ : Char) ->
@@ -947,7 +955,7 @@ let rec xmlElement : Parser[XMLNode] =
             <|>[XMLNode]
 
             -- Short ends
-            ((string (pStringFromString "/>"))
+            ((string "/>")
                 >>[PString, XMLNode] (result[XMLNode] (XMLElement (pStringToString tag) attrs (Nil[XMLNode]))))))
 
 and xmlElementChildren : Parser[PList[XMLNode]] =
@@ -957,10 +965,10 @@ and xmlElementChildren : Parser[PList[XMLNode]] =
     <|>[PList[XMLNode]] (result[PList[XMLNode]] (Nil[XMLNode]));
 
 let xmlProcInst : Parser[XMLNode] =
-    (string (pStringFromString "<?")) >>[PString, Unit] xmlSpace
+    (string "<?") >>[PString, Unit] xmlSpace
         >>[Unit, PString] xmlKey >>=[PString, XMLNode] (\(target : PString) ->
             xmlSpace >>[Unit, PList[XMLNode]] xmlAttrs
-                <*[PList[XMLNode], PString] (xmlSpace >>[Unit, PString] (string (pStringFromString "?>")))
+                <*[PList[XMLNode], PString] (xmlSpace >>[Unit, PString] (string "?>"))
                     >>=[PList[XMLNode], XMLNode] (\(conts : PList[XMLNode]) ->
                         result[XMLNode] (XMLProcInst (pStringToString target) conts)));
 
@@ -1037,18 +1045,18 @@ let f2jTokenToString (tok : F2JToken) : String =
      |  F2JBlockComment cmt        -> "F2JBlockComment ".concat(cmt);
 
 let f2jLineComment : Parser[F2JToken] =
-    (string (pStringFromString "--"))
-        *>[PString, PString]   (many[Char] (noneof (pStringFromString "\r\n")))
+    (string "--")
+        *>[PString, PString]   (many[Char] (noneof "\r\n"))
         <*[PString, Unit]      (eol <|>[Unit] eof)
         <$>[PString, F2JToken] (\(cmt : PString) -> F2JLineComment (pStringToString cmt));
 
 let f2jBlockComment : Parser[F2JToken] =
     let rec nested : Parser[PString] =
-        (string (pStringFromString "{-"));
+        (string "{-");
 
-    (string (pStringFromString "{-"))
+    (string "{-")
         *>[PString, PString] (many[Char] item) -- Need to support nested block comment
-        <*[PString, PString] (string (pStringFromString "-}"))
+        <*[PString, PString] (string "-}")
         <$>[PString, F2JToken] (\(cmt : PString) -> F2JBlockComment (pStringToString cmt));
 
 let f2jComment : Parser[F2JToken] =
@@ -1095,6 +1103,12 @@ let f2jBindingParam : Parser[F2JBindingParam] =
 
 let f2jBindingParams : Parser[PList[F2JBindingParam]] =
     sepby[F2JBindingParam, Unit] f2jBindingParam f2jSpace;
+
+-- let f2jBindingName : Parser[PString] =
+--         ident
+--     <|>[PString]
+--         (((char '(') <*[Char, Unit] f2jSpace)
+--             >>[Char, PString] (many[Char] (oneof "")))
 
 -- Test
 
@@ -1233,7 +1247,7 @@ let testChar : TestFn = {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
-            (char 'a' `parse[Char]` (pStringFromString "abcd"))
+            (char 'a' `parsePString[Char]` (pStringFromString "abcd"))
             (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (pStringFromString "bcd"))))
 };
 
@@ -1243,7 +1257,7 @@ let testUpper : TestFn = {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
-            (upper `parse[Char]` (pStringFromString "ABC"))
+            (upper `parsePString[Char]` (pStringFromString "ABC"))
             (singleton[ParseContext[Char]] ('A', ((SourcePos "<default>" 1 2), (pStringFromString "BC"))))
 };
 
@@ -1253,7 +1267,7 @@ let testLetter : TestFn = {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
-            (letter `parse[Char]` (pStringFromString "abcd"))
+            (letter `parsePString[Char]` (pStringFromString "abcd"))
             (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (pStringFromString "bcd"))))
 };
 
@@ -1263,7 +1277,7 @@ let testString : TestFn = {
         assertEq[ParseOutput[PString]]
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
-            (string (pStringFromString "abc") `parse[PString]` (pStringFromString "abcd"))
+            ((string "abc") `parsePString[PString]` (pStringFromString "abcd"))
             (singleton[ParseContext[PString]] ((pStringFromString "abc"), ((SourcePos "<default>" 1 4), (pStringFromString "d"))))
 };
 
@@ -1278,7 +1292,7 @@ let testMany : TestFn = {
         assertEq[ParseOutput[PString]]
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
-            (many[Char] (char 'a') `parse[PString]` (pStringFromString "aaab"))
+            (many[Char] (char 'a') `parsePString[PString]` (pStringFromString "aaab"))
             expected
     }
 };
@@ -1293,7 +1307,7 @@ let testMany1 : TestFn = {
         assertEq[ParseOutput[PString]]
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
-            (many1[Char] (char 'a') `parse[PString]` (pStringFromString "aaab"))
+            (many1[Char] (char 'a') `parsePString[PString]` (pStringFromString "aaab"))
             expected
     }
 };
@@ -1304,7 +1318,7 @@ let testChoice : TestFn = {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
-            (choice[Char] (char 'a') (char 'b') `parse[Char]` (pStringFromString "aaab"))
+            (choice[Char] (char 'a') (char 'b') `parsePString[Char]` (pStringFromString "aaab"))
             (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), pStringFromString "aab")))
 };
 
@@ -1318,8 +1332,8 @@ let testChoice2 : TestFn = {
         assertEq[ParseOutput[PString]]
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
-            (choice[PString] (string (pStringFromString "aa")) (string (pStringFromString "aaa"))
-                `parse[PString]` (pStringFromString "aaab"))
+            (choice[PString] (string "aa") (string "aaa")
+                `parsePString[PString]` (pStringFromString "aaab"))
             expected
     }
 };
@@ -1337,7 +1351,7 @@ let testWord : TestFn = {
         assertEq[ParseOutput[PString]]
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
-            (word `parse[PString]` (pStringFromString "aaabcd abcd"))
+            (word `parsePString[PString]` (pStringFromString "aaabcd abcd"))
             expected
     }
 };
@@ -1355,7 +1369,7 @@ let testNatural : TestFn = {
         assertEq[ParseOutput[Int]]
             (parseOutputEq[Int] intEq)
             (parseOutputToString[Int] intToString)
-            (natural `parse[Int]` (pStringFromString "12345"))
+            (natural `parsePString[Int]` (pStringFromString "12345"))
             expected
     }
 };
@@ -1366,7 +1380,7 @@ let testHexDecimal : TestFn = {
          assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (hexdecimal `parse[Int]` (pStringFromString "a0"))
+            (hexdecimal `parsePString[Int]` (pStringFromString "a0"))
             (160, ((SourcePos "<default>" 1 3), pStringFromString ""))
 };
 
@@ -1376,7 +1390,7 @@ let testSepby1 : TestFn = {
         assertFirstParseOutputEq[PList[PString]]
             (pListEq[PString] pStringEq)
             (pListToString[PString] pStringToString)
-            (sepby1[PString, Char] (word) (char ',') `parse[PList[PString]]` (pStringFromString "abc,def"))
+            (sepby1[PString, Char] (word) (char ',') `parsePString[PList[PString]]` (pStringFromString "abc,def"))
             ((pStringFromString "abc") +>[PString] ((pStringFromString "def") +>[PString] (Nil[PString])),
              ((SourcePos "<default>" 1 8), (pStringFromString "")))
 };
@@ -1387,7 +1401,7 @@ let testNoneOf : TestFn = {
         assertFirstParseOutputEq[Char]
                 charEq
                 charToString
-                (noneof (pStringFromString "abc") `parse[Char]` (pStringFromString "dce"))
+                (noneof "abc" `parsePString[Char]` (pStringFromString "dce"))
                 ('d', ((SourcePos "<default>" 1 2), pStringFromString "ce"))
 };
 
@@ -1416,7 +1430,7 @@ let testSimpleExpr : TestFn = {
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parse[Int]` (pStringFromString "123"))
+            (expr `parsePString[Int]` (pStringFromString "123"))
             (123, ((SourcePos "<default>" 1 4), pStringFromString ""))
 };
 
@@ -1426,7 +1440,7 @@ let testSimpleExprWithBracket : TestFn = {
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parse[Int]` (pStringFromString "(123)"))
+            (expr `parsePString[Int]` (pStringFromString "(123)"))
             (123, ((SourcePos "<default>" 1 6), pStringFromString ""))
 };
 
@@ -1436,7 +1450,7 @@ let testSimpleExpr2 : TestFn = {
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parse[Int]` (pStringFromString "1+2"))
+            (expr `parsePString[Int]` (pStringFromString "1+2"))
             (3, ((SourcePos "<default>" 1 4), pStringFromString ""))
 };
 
@@ -1446,7 +1460,7 @@ let testSimpleExpr3 : TestFn = {
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parse[Int]` (pStringFromString "10+2"))
+            (expr `parsePString[Int]` (pStringFromString "10+2"))
             (12, ((SourcePos "<default>" 1 5), pStringFromString ""))
 };
 
@@ -1456,7 +1470,7 @@ let testSimpleExpr4 : TestFn = {
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parse[Int]` (pStringFromString "(10+2)*2"))
+            (expr `parsePString[Int]` (pStringFromString "(10+2)*2"))
             (24, ((SourcePos "<default>" 1 9), pStringFromString ""))
 };
 
@@ -1466,7 +1480,7 @@ let testSimpleExpr5 : TestFn = {
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parse[Int]` (pStringFromString "(10+2)*2/6"))
+            (expr `parsePString[Int]` (pStringFromString "(10+2)*2/6"))
             (4, ((SourcePos "<default>" 1 11), pStringFromString ""))
 };
 
@@ -1489,7 +1503,7 @@ let testXMLComment : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlComment `parse[XMLNode]` (pStringFromString "<!-- hahaa? -->"))
+            (xmlComment `parsePString[XMLNode]` (pStringFromString "<!-- hahaa? -->"))
             ((XMLComment " hahaa? "),
              ((SourcePos "<default>" 1 16), pStringFromString ""))
 };
@@ -1500,7 +1514,7 @@ let testXMLDoubleQuotedString : TestFn = {
         assertFirstParseOutputEq[PString]
             pStringEq
             pStringToString
-            (xmlDoubleQuotedString `parse[PString]` (pStringFromString "\"abcdef\""))
+            (xmlDoubleQuotedString `parsePString[PString]` (pStringFromString "\"abcdef\""))
             (pStringFromString "abcdef", ((SourcePos "<default>" 1 9), pStringFromString ""))
 };
 
@@ -1510,7 +1524,7 @@ let testXMLSingleQuotedString : TestFn = {
         assertFirstParseOutputEq[PString]
             pStringEq
             pStringToString
-            (xmlSingleQuotedString `parse[PString]` (pStringFromString "'abcdef'"))
+            (xmlSingleQuotedString `parsePString[PString]` (pStringFromString "'abcdef'"))
             ((pStringFromString "abcdef"), ((SourcePos "<default>" 1 9), (pStringFromString "")))
 };
 
@@ -1520,14 +1534,14 @@ let testXMLText : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlText `parse[XMLNode]` (pStringFromString "abcdefg&lt;hijk"))
+            (xmlText `parsePString[XMLNode]` (pStringFromString "abcdefg&lt;hijk"))
             (XMLText "abcdefg<hijk", ((SourcePos "<default>" 1 16), pStringFromString ""))
 };
 
 let testXMLTextEmpty : TestFn = {
     name = "xmlText (pStringFromString \"\")",
     fn   = \(__ : Unit) ->
-        assert (isempty[ParseContext[XMLNode]] (xmlText `parse[XMLNode]` (pStringFromString "")))
+        assert (isempty[ParseContext[XMLNode]] (xmlText `parsePString[XMLNode]` (pStringFromString "")))
 };
 
 let testXMLAttr : TestFn = {
@@ -1536,7 +1550,7 @@ let testXMLAttr : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlAttr `parse[XMLNode]` (pStringFromString "key = \"vvvalue\""))
+            (xmlAttr `parsePString[XMLNode]` (pStringFromString "key = \"vvvalue\""))
             (XMLAttr "key" "vvvalue",
              ((SourcePos "<default>" 1 16), pStringFromString ""))
 };
@@ -1547,7 +1561,7 @@ let testXMLAttrs : TestFn = {
         assertFirstParseOutputEq[PList[XMLNode]]
             (pListEq[XMLNode] xmlNodeEqual)
             (pListToString[XMLNode] xmlNodeToString)
-            (xmlAttrs `parse[PList[XMLNode]]` (pStringFromString "key = \"vvvalue\" hello = \"world\" haha='what?'"))
+            (xmlAttrs `parsePString[PList[XMLNode]]` (pStringFromString "key = \"vvvalue\" hello = \"world\" haha='what?'"))
             ((XMLAttr "key""vvvalue")
                 +>[XMLNode] ((XMLAttr "hello" "world")
                 +>[XMLNode] ((XMLAttr "haha" "what?")
@@ -1561,7 +1575,7 @@ let testElementSimple : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a></a>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a></a>"))
             (XMLElement "a" (Nil[XMLNode]) (Nil[XMLNode]),
              ((SourcePos "<default>" 1 8), pStringFromString ""))
 };
@@ -1572,7 +1586,7 @@ let testElementWithText : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a>ha?haha!</a>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a>ha?haha!</a>"))
             (XMLElement "a" (Nil[XMLNode]) (singleton[XMLNode] (XMLText "ha?haha!")),
              ((SourcePos "<default>" 1 16), pStringFromString ""))
 };
@@ -1583,7 +1597,7 @@ let testElementWithChildren : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a><b></b></a>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a><b></b></a>"))
             (XMLElement "a" (Nil[XMLNode])
                 (singleton[XMLNode] (XMLElement "b" (Nil[XMLNode]) (Nil[XMLNode]))),
              ((SourcePos "<default>" 1 15), pStringFromString ""))
@@ -1598,7 +1612,7 @@ let testElementWithChildren2 : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a><b></b><c></c></a>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a><b></b><c></c></a>"))
             (a, ((SourcePos "<default>" 1 22), pStringFromString ""))
     }
 };
@@ -1613,7 +1627,7 @@ let testElementWithAttr : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"))
             (elem, ((SourcePos "<default>" 1 50), pStringFromString ""))
     }
 };
@@ -1628,7 +1642,7 @@ let testElementWithAttrWithChildren : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a href='/toosimple/sometimes/naive'><b></b></a>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a href='/toosimple/sometimes/naive'><b></b></a>"))
             (elem, ((SourcePos "<default>" 1 49), pStringFromString ""))
     }
 };
@@ -1646,7 +1660,7 @@ let testElementSimple2 : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]`
+            (xmlElement `parsePString[XMLNode]`
                 (pStringFromString
                     "<you young='too' simple='too'><naive>true</naive></you>"))
             (elem, ((SourcePos "<default>" 1 56), pStringFromString ""))
@@ -1660,7 +1674,7 @@ let testElementSimpleEndTag : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a/>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a/>"))
             (elem, ((SourcePos "<default>" 1 5), pStringFromString ""))
     }
 };
@@ -1678,7 +1692,7 @@ let testElementSimpleEndTag2 : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]`
+            (xmlElement `parsePString[XMLNode]`
                 (pStringFromString
                     "<you young='too' simple='too'><naive><required/></naive></you>"))
             (elem, ((SourcePos "<default>" 1 63), pStringFromString ""))
@@ -1699,7 +1713,7 @@ let testElementSimpleEndTag3 : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]`
+            (xmlElement `parsePString[XMLNode]`
                 (pStringFromString
                     "<you young='too' simple='too'>\n\t<naive>\n\t\t<required/>\n\t</naive>\n</you>"))
             (elem, ((SourcePos "<default>" 5 7), pStringFromString ""))
@@ -1717,7 +1731,7 @@ let testElementSimpleEndTag4 : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<a href='https://github.com/hkuplg/fcore'/>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a href='https://github.com/hkuplg/fcore'/>"))
             (elem, ((SourcePos "<default>" 1 44), pStringFromString ""))
     }
 };
@@ -1729,7 +1743,7 @@ let testCDataSimple : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlCData `parse[XMLNode]` (pStringFromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
+            (xmlCData `parsePString[XMLNode]` (pStringFromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
             (elem, ((SourcePos "<default>" 1 63), pStringFromString ""))
     }
 };
@@ -1742,7 +1756,7 @@ let testElementWithCData : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlElement `parse[XMLNode]` (pStringFromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
             (elem, ((SourcePos "<default>" 1 65), pStringFromString ""))
     }
 };
@@ -1757,7 +1771,7 @@ let testProcInst : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlProcInst `parse[XMLNode]` (pStringFromString "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"))
+            (xmlProcInst `parsePString[XMLNode]` (pStringFromString "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"))
             (elem, ((SourcePos "<default>" 1 40), pStringFromString ""))
     }
 };
@@ -1769,7 +1783,7 @@ let testProcInst2 : TestFn = {
         assertFirstParseOutputEq[XMLNode]
             xmlNodeEqual
             xmlNodeToString
-            (xmlProcInst `parse[XMLNode]` (pStringFromString "<?xml-stylesheet ?>"))
+            (xmlProcInst `parsePString[XMLNode]` (pStringFromString "<?xml-stylesheet ?>"))
             (elem, ((SourcePos "<default>" 1 20), pStringFromString ""))
     }
 };
@@ -1813,35 +1827,35 @@ let parserTestSuites : PList[TestSuite] =
 
     println (parseOutputToString[F2JToken]
                 f2jTokenToString
-                (f2jComment `parse[F2JToken]` (pStringFromString "-- abchahaha")));
+                (f2jComment `parsePString[F2JToken]` (pStringFromString "-- abchahaha")));
 
     println (parseOutputToString[F2JToken]
                 f2jTokenToString
-                (f2jComment `parse[F2JToken]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
+                (f2jComment `parsePString[F2JToken]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
 
     println (parseOutputToString[F2JToken]
                 f2jTokenToString
-                (f2jComment `parse[F2JToken]` (pStringFromString "{- abchahaha -}")));
+                (f2jComment `parsePString[F2JToken]` (pStringFromString "{- abchahaha -}")));
 
     println (parseOutputToString[Unit]
                 unitToString
-                (eol `parse[Unit]` (pStringFromString "\nabcde")));
+                (eol `parsePString[Unit]` (pStringFromString "\nabcde")));
 
     println (parseOutputToString[F2JType]
                 f2jTypeToString
-                (f2jType `parse[F2JType]` (pStringFromString "A[B, C[D]]")));
+                (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
 
     println (parseOutputToString[F2JType]
                 f2jTypeToString
-                (f2jType `parse[F2JType]` (pStringFromString "(A, B)")));
+                (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
 
     println (parseOutputToString[F2JBindingParam]
                 f2jBindingParamToString
-                (f2jBindingParam `parse[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
+                (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
 
     println (parseOutputToString[PList[F2JBindingParam]]
                 (pListToString[F2JBindingParam] f2jBindingParamToString)
-                (f2jBindingParams `parse[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
+                (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
 
     "\n-- END --"
 }

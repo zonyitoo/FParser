@@ -1054,9 +1054,9 @@ data F2JExpr = F2JApplication   String  PList[F2JType] PList[F2JExpr]
              -- case of
              | F2JCase          F2JExpr PList[(F2JCaseAlternative, F2JExpr)]
              -- ADT
-             | F2JADT           F2JType PList[F2JADTAlternative]
+             | F2JADT           F2JType PList[F2JADTAlternative] F2JExpr
              -- Alias
-             | F2JTypeAlias     F2JType F2JType
+             | F2JTypeAlias     F2JType F2JType F2JExpr
              -- Tuple
              | F2JPair          PList[F2JExpr]
              -- Int literal
@@ -1115,25 +1115,45 @@ let rec f2jTypeParams : Parser[PList[F2JType]] =
 and f2jPairedType : Parser[F2JType] =
     between[Unit, Unit, F2JType] ((char '(') >>[Char, Unit] f2jSpace) ((char ')') >>[Char, Unit] f2jSpace)
         ((sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
-            <$>[PList[F2JType], F2JType] (\(types : PList[F2JType]) -> F2JPairedType types))
-and f2jFunctionType : Parser[F2JType] =
-        f2jType >>=[F2JType, F2JType] (\(from : F2JType) ->
-            (f2jSpace >>[Unit, PString] (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JType] f2jType)
-                 >>=[F2JType, F2JType] (\(to : F2JType) ->
-                    result[F2JType] (F2JFunctionType from to)))
+            >>=[PList[F2JType], F2JType] (\(types : PList[F2JType]) ->
+
+                (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                    let ftypefrom = F2JPairedType types;
+                    result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+                <|>[F2JType]
+                (result[F2JType] (F2JPairedType types))
+            ))
+
+and f2jSinglePairedType : Parser[F2JType] =
+    between[Unit, Unit, F2JType] ((char '(') >>[Char, Unit] f2jSpace) ((char ')') >>[Char, Unit] f2jSpace)
+        (f2jType >>=[F2JType, F2JType] (\(t : F2JType) ->
+
+            (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                let ftypefrom = t;
+                result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+            <|>[F2JType]
+                result[F2JType] t))
+
+and f2jFunctionTypeRest : Parser[F2JType] =
+    (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JType] f2jType
+
 and f2jSingleType : Parser[F2JType] =
-    (f2jTypeName)                                                                                                   >>=[PString, F2JType] (\(typename : PString) ->
+    (f2jTypeName)                                                                                                       >>=[PString, F2JType]        (\(typename : PString) ->
         ((f2jSpace >>[Unit, PList[F2JType]] f2jTypeParams) <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(tparams : PList[F2JType]) ->
-        result[F2JType] (F2JNormalType (pStringToString typename) tparams)))
+
+            (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                let ftypefrom = F2JNormalType (pStringToString typename) tparams;
+                result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+            <|>[F2JType]
+            (result[F2JType] (F2JNormalType (pStringToString typename) tparams))
+
+        ))
 and f2jType : Parser[F2JType] =
         f2jSingleType
     <|>[F2JType]
-        (((char '(') >>[Char, Unit] f2jSpace) *>[Unit, F2JType] f2jType <*[F2JType, Char] (f2jSpace >>[Unit, Char] (char ')')))
+        f2jSinglePairedType
     <|>[F2JType]
         f2jPairedType;
-    -- FIXME: Left recursion
-    -- <|>[F2JType]
-    --     f2jFunctionType;
 
 let f2jBindingParam : Parser[F2JBindingParam] =
     let seperator =
@@ -1912,13 +1932,13 @@ let parserTestSuites : PList[TestSuite] =
     --             pStringToString
     --             (f2jBindingName `parseString[PString]` "(<!>)"));
 
-    -- println (parseOutputToString[F2JType]
-    --             f2jTypeToString
-    --             (f2jFunctionType `parsePString[F2JType]` (pStringFromString "A -> B -> C")));
+    println (parseOutputToString[F2JType]
+                f2jTypeToString
+                (f2jType `parsePString[F2JType]` (pStringFromString "((A))")));
 
     println (parseOutputToString[F2JType]
                 f2jTypeToString
-                (f2jType `parsePString[F2JType]` (pStringFromString "(A)")));
+                (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")));
 
     "\n-- END --"
 }

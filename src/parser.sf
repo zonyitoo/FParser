@@ -109,14 +109,14 @@ let rec foldl[A, B] (f : B -> A -> B) (z : B) (l : PList[A]) : B =
 --     |  Cons x xs       ->      f x (foldr[A, B] f z (invoke[PList[A]] xs));
 
 let foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
-    (let rec inner (s : PList[A]) (k : B -> B) : B =
+    let rec inner (s : PList[A]) (k : B -> B) : B =
         case s of
             Nil         -> k z
          |  Cons x xs   -> inner (invoke[PList[A]] xs) (\(y : B) -> k (f x y));
-     inner l (\(x : B) -> x));
+     inner l (\(x : B) -> x);
 
 
-let join[A] (l : PList[A]) (j : A) : PList[A] = {
+let join[A] (l : PList[A]) (j : A) : PList[A] =
     let rec inner[A] (l : PList[A]) (j : A) : PList[A] =
         case l of
             Nil         -> (Nil[A])
@@ -124,8 +124,7 @@ let join[A] (l : PList[A]) (j : A) : PList[A] = {
                                 (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j))));
     case l of
         Nil         -> (Nil[A])
-     |  Cons x xs   -> (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j))
-};
+     |  Cons x xs   -> (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j));
 
 let (+>)[A] (a : A) (l : PList[A]) : PList[A] =
     Cons[A] a (\(__ : Unit) -> l);
@@ -218,14 +217,13 @@ let pStringToString (l : PString) : String =
         (new java.lang.StringBuilder( ))
         l).toString();
 
-let pStringFromString (str : String) : PString = {
+let pStringFromString (str : String) : PString =
     let rec inner (str : String) (idx : Int) : PString =
         if idx `intEq` length(str) then
             (Nil[Char])
         else
             (Cons[Char] str.charAt(idx) (\(__ : Unit) -> (inner str (idx+1))));
-    inner str 0
-};
+    inner str 0;
 
 let rec pStringEq (a : PString) (b : PString) : Bool =
     pListEq[Char] charEq a b;
@@ -630,23 +628,21 @@ let ident : Parser[PString] =
     bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
     result[PString] (x +>[Char] xs)));
 
-let natural : Parser[Int] = {
+let natural : Parser[Int] =
     let eval (xs : PList[Char]) =
         foldl[Int, Int] (\(b : Int) (a : Int) -> 10 * b + a)
                         0
                         (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 10)) xs);
 
-    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs))
-};
+    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs));
 
-let hexdecimal : Parser[Int] = {
+let hexdecimal : Parser[Int] =
     let eval (xs : PList[Char]) =
         foldl[Int, Int] (\(b : Int) (a : Int) -> 16 * b + a)
                         0
                         (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 16)) xs);
     (many1[Char] (oneof "1234567890abcdefABCDEF"))
-        <$>[PList[Char], Int] (\(xs : PList[Char]) -> eval xs)
-};
+        <$>[PList[Char], Int] (\(xs : PList[Char]) -> eval xs);
 
 let int : Parser[Int] =
     choice[Int] ((char '-') >>[Char, Int]
@@ -655,13 +651,12 @@ let int : Parser[Int] =
 
 -- Repetition with seperators
 
-let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] = {
+let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
     let rep[A, B] (p : Parser[A]) : Parser[A] =
         bind[B, A] sep (\(s : B) -> bind[A, A] p (\(y : A) -> result[A] y));
     bind[A, PList[A]]        p                       (\(x : A) ->
     bind[PList[A], PList[A]] (many[A] (rep[A, B] p)) (\(xs : PList[A]) ->
-    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))))
-};
+    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
 
 let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
     choice[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
@@ -672,7 +667,7 @@ let between[L, R, P] (l : Parser[L]) (r : Parser[R]) (p : Parser[P]) : Parser[P]
 -- More complicated
 
 -- Parses non-empty sequences of items seperated by operators that associate to the left
-let chainl1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] = {
+let chainl1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] =
     let fy =
         bind[A -> A -> A, (A -> A -> A, A)] op (\(f : A -> A -> A) ->
         bind[A, (A -> A -> A, A)]           p  (\(y : A) ->
@@ -680,8 +675,7 @@ let chainl1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] = {
 
     bind[A, A]                           p                            (\(x : A) ->
     bind[PList[(A -> A -> A, A)], A]     (many[(A -> A -> A, A)] fy)  (\(fys: PList[(A -> A -> A, A)]) ->
-    result[A] (foldl[(A -> A -> A, A), A] (\(x : A) (fy : (A -> A -> A, A)) -> fy._1 x fy._2) x fys)))
-};
+    result[A] (foldl[(A -> A -> A, A), A] (\(x : A) (fy : (A -> A -> A, A)) -> fy._1 x fy._2) x fys)));
 
 -- associate to the right
 let rec chainr1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] =
@@ -728,7 +722,7 @@ let only[A] (p : Parser[A]) : Parser[A] =
 let bracket[B] (p : Parser[B]) : Parser[B] =
     between[Char, Char, B] (char '(') (char ')') p;
 
-let operation = {
+let operation =
     let addop (a : Int) (b : Int) : Int = a + b;
     let subop (a : Int) (b : Int) : Int = a - b;
     let mulop (a : Int) (b : Int) : Int = a * b;
@@ -739,8 +733,7 @@ let operation = {
     let mul = (char '*') $>[Char, Int -> Int -> Int] mulop;
     let div = (char '/') $>[Char, Int -> Int -> Int] divop;
 
-    add `choice[Int -> Int -> Int]` sub `choice[Int -> Int -> Int]` mul `choice[Int -> Int -> Int]` div
-};
+    add `choice[Int -> Int -> Int]` sub `choice[Int -> Int -> Int]` mul `choice[Int -> Int -> Int]` div;
 
 let rec expr : Parser[Int] =
     \(s : ParseInput) -> chainl1[Int] factor operation s
@@ -981,8 +974,9 @@ let parseXML : Parser[PList[XMLNode]] =
 
 -- F2J Parser
 
-data F2JType = F2JNormalType String PList[F2JType]
-             | F2JPairedType PList[F2JType]
+data F2JType = F2JNormalType    String PList[F2JType]
+             | F2JPairedType    PList[F2JType]
+             | F2JFunctionType  F2JType F2JType
              ;
 
 let rec f2jTypeToString (t : F2JType) : String =
@@ -996,6 +990,12 @@ let rec f2jTypeToString (t : F2JType) : String =
      |  F2JPairedType types ->
             (new java.lang.StringBuilder("F2JPairedType "))
                 .append(pListToString[F2JType] f2jTypeToString types)
+                .toString()
+     |  F2JFunctionType from to ->
+            (new java.lang.StringBuilder("F2JFunctionType "))
+                .append(f2jTypeToString from)
+                .append(" -> ")
+                .append(f2jTypeToString to)
                 .toString();
 
 let rec f2jTypeEq (a : F2JType) (b : F2JType) : Bool =
@@ -1004,11 +1004,19 @@ let rec f2jTypeEq (a : F2JType) (b : F2JType) : Bool =
             case b of
                 F2JNormalType n2 p2 -> (n1 `stringEq` n2) && (pListEq[F2JType] f2jTypeEq p1 p2)
              |  F2JPairedType _     -> False
+             |  F2JFunctionType _ _ -> False
         }
      |  F2JPairedType t1 -> {
             case b of
                 F2JNormalType _ _   -> False
              |  F2JPairedType t2    -> pListEq[F2JType] f2jTypeEq t1 t2
+             |  F2JFunctionType _ _ -> False
+        }
+     |  F2JFunctionType t1f t1t -> {
+            case b of
+                F2JNormalType _ _       -> False
+             |  F2JPairedType _         -> False
+             |  F2JFunctionType t2f t2t -> (t1f `f2jTypeEq` t2f) && (t1t `f2jTypeEq` t2t)
         };
 
 data F2JBindingParam = F2JBindingParam String F2JType;
@@ -1029,10 +1037,36 @@ let f2jBindingParamEq (a : F2JBindingParam) (b : F2JBindingParam) : Bool =
                 F2JBindingParam idb tb ->
                     (ida `stringEq` idb) && (ta `f2jTypeEq` tb);
 
-data F2JExpr = F2JApplication   String PList[F2JType] PList[F2JExpr]
-             | F2JLet           String PList[F2JBindingParam] Maybe[F2JType] PList[F2JExpr] F2JExpr
-             | F2JLetRec        String PList[F2JBindingParam] F2JType PList[F2JExpr] F2JExpr
+data F2JCaseAlternative = F2JCaseAlternative String PList[String];
+
+data F2JADTAlternative = F2JADTAlternative String PList[F2JType];
+
+             -- Application     name    type params    expr
+data F2JExpr = F2JApplication   String  PList[F2JType] PList[F2JExpr]
+             -- Let binding     name    type params            return type    and          ; expr
+             | F2JLet           String  PList[F2JBindingParam] Maybe[F2JType] PList[F2JExpr] F2JExpr
+             -- Let rec binding name    type params            return type    and          ; expr
+             | F2JLetRec        String  PList[F2JBindingParam] F2JType        PList[F2JExpr] F2JExpr
+             -- Lambda function params                 inner expr
              | F2JLambda        PList[F2JBindingParam] F2JExpr
+             -- Infixop         name    type params    left    right
+             | F2JInfixOp       String  PList[F2JType] F2JExpr F2JExpr
+             -- case of
+             | F2JCase          F2JExpr PList[(F2JCaseAlternative, F2JExpr)]
+             -- ADT
+             | F2JADT           F2JType PList[F2JADTAlternative]
+             -- Alias
+             | F2JTypeAlias     F2JType F2JType
+             -- Tuple
+             | F2JPair          PList[F2JExpr]
+             -- Int literal
+             | F2JIntLiteral    String
+             -- Double literal
+             -- Long literal
+             -- Short literal
+             -- Byte literal
+             -- String Literal
+             | F2JStringLiteral String
              ;
 
 data F2JToken = F2JLineComment String
@@ -1082,12 +1116,24 @@ and f2jPairedType : Parser[F2JType] =
     between[Unit, Unit, F2JType] ((char '(') >>[Char, Unit] f2jSpace) ((char ')') >>[Char, Unit] f2jSpace)
         ((sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
             <$>[PList[F2JType], F2JType] (\(types : PList[F2JType]) -> F2JPairedType types))
+and f2jFunctionType : Parser[F2JType] =
+        f2jType >>=[F2JType, F2JType] (\(from : F2JType) ->
+            (f2jSpace >>[Unit, PString] (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JType] f2jType)
+                 >>=[F2JType, F2JType] (\(to : F2JType) ->
+                    result[F2JType] (F2JFunctionType from to)))
+and f2jSingleType : Parser[F2JType] =
+    (f2jTypeName)                                                                                                   >>=[PString, F2JType] (\(typename : PString) ->
+        ((f2jSpace >>[Unit, PList[F2JType]] f2jTypeParams) <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(tparams : PList[F2JType]) ->
+        result[F2JType] (F2JNormalType (pStringToString typename) tparams)))
 and f2jType : Parser[F2JType] =
-        ((f2jTypeName)                                                                                                   >>=[PString, F2JType] (\(typename : PString) ->
-         ((f2jSpace >>[Unit, PList[F2JType]] f2jTypeParams) <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(tparams : PList[F2JType]) ->
-         result[F2JType] (F2JNormalType (pStringToString typename) tparams))))
+        f2jSingleType
+    <|>[F2JType]
+        (((char '(') >>[Char, Unit] f2jSpace) *>[Unit, F2JType] f2jType <*[F2JType, Char] (f2jSpace >>[Unit, Char] (char ')')))
     <|>[F2JType]
         f2jPairedType;
+    -- FIXME: Left recursion
+    -- <|>[F2JType]
+    --     f2jFunctionType;
 
 let f2jBindingParam : Parser[F2JBindingParam] =
     let seperator =
@@ -1104,11 +1150,12 @@ let f2jBindingParam : Parser[F2JBindingParam] =
 let f2jBindingParams : Parser[PList[F2JBindingParam]] =
     sepby[F2JBindingParam, Unit] f2jBindingParam f2jSpace;
 
--- let f2jBindingName : Parser[PString] =
---         ident
---     <|>[PString]
---         (((char '(') <*[Char, Unit] f2jSpace)
---             >>[Char, PString] (many[Char] (oneof "")))
+let f2jBindingName : Parser[PString] =
+        ident
+    <|>[PString]
+        (((char '(') >>[Char, Unit] f2jSpace)
+            >>[Unit, PString] (many[Char] (oneof "!@#$%^&*<>?|\\/+-*"))
+            <*[PString, Char] (f2jSpace >>[Unit, Char] (char ')')));
 
 -- Test
 
@@ -1823,39 +1870,55 @@ let parserTestSuites : PList[TestSuite] =
         +>[TestSuite] (Nil[TestSuite]))));
 
 {
-    runTestSuites parserTestSuites;
+    -- runTestSuites parserTestSuites;
 
-    println (parseOutputToString[F2JToken]
-                f2jTokenToString
-                (f2jComment `parsePString[F2JToken]` (pStringFromString "-- abchahaha")));
+    -- println (parseOutputToString[F2JToken]
+    --             f2jTokenToString
+    --             (f2jComment `parsePString[F2JToken]` (pStringFromString "-- abchahaha")));
 
-    println (parseOutputToString[F2JToken]
-                f2jTokenToString
-                (f2jComment `parsePString[F2JToken]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
+    -- println (parseOutputToString[F2JToken]
+    --             f2jTokenToString
+    --             (f2jComment `parsePString[F2JToken]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
 
-    println (parseOutputToString[F2JToken]
-                f2jTokenToString
-                (f2jComment `parsePString[F2JToken]` (pStringFromString "{- abchahaha -}")));
+    -- println (parseOutputToString[F2JToken]
+    --             f2jTokenToString
+    --             (f2jComment `parsePString[F2JToken]` (pStringFromString "{- abchahaha -}")));
 
-    println (parseOutputToString[Unit]
-                unitToString
-                (eol `parsePString[Unit]` (pStringFromString "\nabcde")));
+    -- println (parseOutputToString[Unit]
+    --             unitToString
+    --             (eol `parsePString[Unit]` (pStringFromString "\nabcde")));
+
+    -- println (parseOutputToString[F2JType]
+    --             f2jTypeToString
+    --             (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
+
+    -- println (parseOutputToString[F2JType]
+    --             f2jTypeToString
+    --             (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
+
+    -- println (parseOutputToString[F2JBindingParam]
+    --             f2jBindingParamToString
+    --             (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
+
+    -- println (parseOutputToString[PList[F2JBindingParam]]
+    --             (pListToString[F2JBindingParam] f2jBindingParamToString)
+    --             (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
+
+    -- println (parseOutputToString[PString]
+    --             pStringToString
+    --             (f2jBindingName `parseString[PString]` "parseOutputToString"));
+
+    -- println (parseOutputToString[PString]
+    --             pStringToString
+    --             (f2jBindingName `parseString[PString]` "(<!>)"));
+
+    -- println (parseOutputToString[F2JType]
+    --             f2jTypeToString
+    --             (f2jFunctionType `parsePString[F2JType]` (pStringFromString "A -> B -> C")));
 
     println (parseOutputToString[F2JType]
                 f2jTypeToString
-                (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
-
-    println (parseOutputToString[F2JType]
-                f2jTypeToString
-                (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
-
-    println (parseOutputToString[F2JBindingParam]
-                f2jBindingParamToString
-                (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
-
-    println (parseOutputToString[PList[F2JBindingParam]]
-                (pListToString[F2JBindingParam] f2jBindingParamToString)
-                (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
+                (f2jType `parsePString[F2JType]` (pStringFromString "(A)")));
 
     "\n-- END --"
 }

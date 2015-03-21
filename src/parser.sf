@@ -33,7 +33,7 @@ data Maybe[A] = Nothing
 let maybeToString[A] (tostr : Show[A]) (m : Maybe[A]) : String =
     case m of
         Nothing     -> "Nothing"
-     |  Just x      -> "Just ".concat(tostr x);
+     |  Just x      -> "Just \{tostr x}";
 
 let maybeEq[A] (eq : Eq[A]) (a : Maybe[A]) (b : Maybe[A]) : Bool =
     case a of
@@ -68,8 +68,8 @@ let resultEq[S, E] (eqs : Eq[S]) (eqe : Eq[E]) (a : Result[S, E]) (b : Result[S,
 
 let resultToString[S, E] (sToStr : Show[S]) (eToStr : Show[E]) (r : Result[S, E]) : String =
     case r of
-        Ok s    -> "Ok ".concat(sToStr s)
-     |  Err e   -> "Err ".concat(eToStr e);
+        Ok s    -> "Ok \{sToStr s}"
+     |  Err e   -> "Err \{eToStr e}";
 
 -- Order
 data Order = Equals
@@ -293,15 +293,7 @@ let updatePosPString (p : SourcePos) (s : PString) : SourcePos =
 let sourcePosToString (p : SourcePos) : String =
     case p of
         SourcePos name line col ->
-            (new java.lang.StringBuilder("\""))
-                .append(name)
-                .append("\" ")
-                .append("(")
-                .append(line)
-                .append(":")
-                .append(col)
-                .append(")")
-                .toString();
+            "\"\{name}\" (\{line}:\{col})";
 
 let sourcePosCompare (p1 : SourcePos) (p2 : SourcePos) : Order =
     case p1 of
@@ -361,9 +353,7 @@ let mergeError (err1 : ParseError) (err2 : ParseError) : ParseError =
 let parseErrorToString (err : ParseError) : String =
     case err of
         ParseError pos msgs ->
-            (sourcePosToString pos)
-                .concat(":")
-                .concat(pListToString[Message] messageToString msgs);
+            "\{sourcePosToString pos}:\{pListToString[Message] messageToString msgs}";
 
 -- Parse Position
 
@@ -379,7 +369,7 @@ let parsePosEq (a : ParsePos) (b : ParsePos) : Bool =
     (a._1 `sourcePosEq` b._1) && (a._2 `sourcePosEq` b._2);
 
 let parsePosToString (a : ParsePos) : String =
-    (sourcePosToString a._1).concat("..").concat(sourcePosToString a._2);
+    "\{sourcePosToString a._1}..\{sourcePosToString a._2}";
 
 -- Parse Result
 
@@ -395,12 +385,7 @@ let parseResultEq[A] (eq : Eq[A]) (a : ParseResult[A]) (b : ParseResult[A]) : Bo
     (a._1 `eq` b._1) && (a._2 `parsePosEq` b._2);
 
 let parseResultToString[A] (str : Show[A]) (res : ParseResult[A]) : String =
-    (new java.lang.StringBuilder("("))
-        .append(str res._1)
-        .append(" ,")
-        .append(parsePosToString res._2)
-        .append(")")
-        .toString();
+    "(\{str res._1}, \{parsePosToString res._2})";
 
 -- Parse Context
 
@@ -441,7 +426,7 @@ let parseInputEq (a : ParseInput) (b : ParseInput) : Bool =
     (a._1 `sourcePosEq` b._1) && (a._2 `pStringEq` b._2);
 
 let parseInputToString (a : ParseInput) : String =
-    "\"".concat(pStringToString a._2).concat("\" @ ").concat(sourcePosToString a._1);
+    "\"\{pStringToString a._2}\" @ \"\{sourcePosToString a._1}\"";
 
 type ParseContext[A] = (A, ParseInput);
 
@@ -455,12 +440,7 @@ let parseContextEq[A] (eq : Eq[A]) (a : ParseContext[A]) (b : ParseContext[A]): 
     (eq a._1 b._1) && (a._2 `parseInputEq` b._2);
 
 let parseContextToString[A] (str : Show[A]) (c : ParseContext[A]) : String =
-    (new java.lang.StringBuilder("("))
-        .append(str c._1)
-        .append(", ")
-        .append(parseInputToString c._2)
-        .append(")")
-        .toString();
+    "(\{str c._1}, \{parseInputToString c._2})";
 
 -- Parser type definition
 
@@ -813,20 +793,14 @@ let rec xmlNodeEqual (a : XMLNode) (b : XMLNode) : Bool =
 
 let rec xmlNodeToString (xml : XMLNode) : String =
     case xml of
-        XMLText str         -> "XMLText ".concat(str)
-     |  XMLComment str      -> "XMLComment ".concat(str)
-     |  XMLAttr key val     -> "XMLAttr ".concat(key).concat(" ").concat(val)
-     |  XMLCData cdata      -> "XMLCData ".concat(cdata)
+        XMLText str         -> "XMLText \{str}"
+     |  XMLComment str      -> "XMLComment \{str}"
+     |  XMLAttr key val     -> "XMLAttr \{key} \{val}"
+     |  XMLCData cdata      -> "XMLCData \{cdata}"
      |  XMLProcInst t attrs
-            -> "XMLProcInst ".concat(t)
-                             .concat(" ")
-                             .concat(pListToString[XMLNode] xmlNodeToString attrs)
+            -> "XMLProcInst \{t} \{pListToString[XMLNode] xmlNodeToString attrs}"
      |  XMLElement tag attrs children
-            -> "XMLElement ".concat(tag)
-                            .concat(" ")
-                            .concat(pListToString[XMLNode] xmlNodeToString attrs)
-                            .concat(" ")
-                            .concat(pListToString[XMLNode] xmlNodeToString children);
+            -> "XMLElement \{tag} \{pListToString[XMLNode] xmlNodeToString attrs} \{pListToString[XMLNode] xmlNodeToString children}";
 
 --let xmlComment : Parser[PList[Char]] =
 --    bind[PString, PList[Char]]     (string (pStringFromString "<!--")) (\(cstart : PString) ->
@@ -982,21 +956,11 @@ data F2JType = F2JNormalType    String PList[F2JType]
 let rec f2jTypeToString (t : F2JType) : String =
     case t of
         F2JNormalType name params ->
-            (new java.lang.StringBuilder("F2JNormalType "))
-                .append(name)
-                .append(" ")
-                .append(pListToString[F2JType] f2jTypeToString params)
-                .toString()
+            "F2JNormalType \{name} \{pListToString[F2JType] f2jTypeToString params}"
      |  F2JPairedType types ->
-            (new java.lang.StringBuilder("F2JPairedType "))
-                .append(pListToString[F2JType] f2jTypeToString types)
-                .toString()
+            "F2JPairedType \{pListToString[F2JType] f2jTypeToString types}"
      |  F2JFunctionType from to ->
-            (new java.lang.StringBuilder("F2JFunctionType "))
-                .append(f2jTypeToString from)
-                .append(" -> ")
-                .append(f2jTypeToString to)
-                .toString();
+            "F2JFunctionType (\{f2jTypeToString from} -> \{f2jTypeToString to})";
 
 let rec f2jTypeEq (a : F2JType) (b : F2JType) : Bool =
     case a of
@@ -1024,11 +988,7 @@ data F2JBindingParam = F2JBindingParam String F2JType;
 let f2jBindingParamToString (b : F2JBindingParam) : String =
     case b of
         F2JBindingParam id t ->
-            (new java.lang.StringBuilder("F2JBindingParam "))
-                .append(id)
-                .append(" ")
-                .append(f2jTypeToString t)
-                .toString();
+            "F2JBindingParam \{id} \{f2jTypeToString t}";
 
 let f2jBindingParamEq (a : F2JBindingParam) (b : F2JBindingParam) : Bool =
     case a of
@@ -1231,10 +1191,7 @@ let assertEq[A] (eq : Eq[A]) (show : Show[A]) (src : A) (expected : A) =
     if src `eq` expected then
         ()
     else
-        error "Assert failed!\n\tExpecting: "
-                    .concat(show expected)
-                    .concat("\n\tBut found: ")
-                    .concat(show src);
+        error "Assert failed!\n\tExpecting: \{show expected}\n\tBut Found: \{show src}";
 
 let firstParseOutputEq[A] (eq : Eq[A]) (r : ParseOutput[A]) (expected : ParseContext[A]) : Bool =
     case first[ParseContext[A]] r of
@@ -1245,15 +1202,14 @@ let assertFirstParseOutputEq[A] (eq : Eq[A]) (show : Show[A]) (src : ParseOutput
     if firstParseOutputEq[A] eq src expected then
         ()
     else
-        error "Assert failed!\n\tExpecting the 1st result: "
-                    .concat(parseContextToString[A] show expected)
-                    .concat("\n\tBut found output        : ")
-                    .concat(parseOutputToString[A] show src);
+        error "Assert failed!\n\tExpecting the 1st result: \{parseContextToString[A] show expected}"
+                    .concat("\n\tBut found output        : \{parseOutputToString[A] show src}");
 
 let printFirstXMLResult (r : PList[(XMLNode, PString)]) =
     case first[(XMLNode, PString)] r of
         Nothing        -> print "Nothing in the List!!"
-     |  Just x         -> print "(".concat(xmlNodeToString x._1).concat(", \"").concat(pStringToString x._2).concat("\")");
+     |  Just x         ->
+            print "(\{xmlNodeToString x._1}, \"\{pStringToString x._2}\")";
 
 -- Test utilities
 

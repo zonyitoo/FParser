@@ -1,0 +1,27 @@
+{-#
+    INCLUDE "show.sf"
+    INCLUDE "eq.sf"
+#-}
+
+-- Maybe definition
+data Maybe[A] = Nothing
+              | Just A
+              ;
+
+let maybeToString[A] (tostr : Show[A]) (m : Maybe[A]) : String =
+    case m of
+        Nothing     -> "Nothing"
+     |  Just x      -> "Just \{tostr x}";
+
+let maybeEq[A] (eq : Eq[A]) (a : Maybe[A]) (b : Maybe[A]) : Bool =
+    case a of
+        Nothing     ->  {
+            case b of
+                Nothing     -> True
+             |  Just _      -> False
+        }
+     |  Just xa     ->  {
+            case b of
+                Nothing     -> False
+             |  Just xb     -> xa `eq` xb
+        };

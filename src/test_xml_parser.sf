@@ -1,0 +1,335 @@
+
+{-#
+    INCLUDE "maybe.sf"
+    INCLUDE "plist.sf"
+    INCLUDE "pstring.sf"
+    INCLUDE "testfx.sf"
+    INCLUDE "xml_parser.sf"
+    INCLUDE "test_parser_helpers.sf"
+#-}
+
+-- Test Naive XML Parser
+
+let printFirstXMLResult (r : PList[(XMLNode, PString)]) =
+    case first[(XMLNode, PString)] r of
+        Nothing        -> print "Nothing in the List!!"
+     |  Just x         ->
+            print "(\{xmlNodeToString x._1}, \"\{pStringToString x._2}\")";
+
+let testXMLComment : TestFn = {
+    name = "xmlComment (pStringFromString \"<!-- hahaa? -->\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlComment `parsePString[XMLNode]` (pStringFromString "<!-- hahaa? -->"))
+            ((XMLComment " hahaa? "),
+             ((SourcePos "<default>" 1 16), pStringFromString ""))
+};
+
+let testXMLDoubleQuotedString : TestFn = {
+    name = "xmlDoubleQuotedString (pStringFromString \"\\\"abcdef\\\"\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[PString]
+            pStringEq
+            pStringToString
+            (xmlDoubleQuotedString `parsePString[PString]` (pStringFromString "\"abcdef\""))
+            (pStringFromString "abcdef", ((SourcePos "<default>" 1 9), pStringFromString ""))
+};
+
+let testXMLSingleQuotedString : TestFn = {
+    name = "xmlSingleQuotedString (pStringFromString \"'abcdef'\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[PString]
+            pStringEq
+            pStringToString
+            (xmlSingleQuotedString `parsePString[PString]` (pStringFromString "'abcdef'"))
+            ((pStringFromString "abcdef"), ((SourcePos "<default>" 1 9), (pStringFromString "")))
+};
+
+let testXMLText : TestFn = {
+    name = "xmlText (pStringFromString \"abcdefg&lt;hijk\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlText `parsePString[XMLNode]` (pStringFromString "abcdefg&lt;hijk"))
+            (XMLText "abcdefg<hijk", ((SourcePos "<default>" 1 16), pStringFromString ""))
+};
+
+let testXMLTextEmpty : TestFn = {
+    name = "xmlText (pStringFromString \"\")",
+    fn   = \(__ : Unit) ->
+        assert (isempty[ParseContext[XMLNode]] (xmlText `parsePString[XMLNode]` (pStringFromString "")))
+};
+
+let testXMLAttr : TestFn = {
+    name = "xmlAttr (pStringFromString \"key = \\\"vvvalue\\\"\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlAttr `parsePString[XMLNode]` (pStringFromString "key = \"vvvalue\""))
+            (XMLAttr "key" "vvvalue",
+             ((SourcePos "<default>" 1 16), pStringFromString ""))
+};
+
+let testXMLAttrs : TestFn = {
+    name = "xmlAttrs (pStringFromString \"key = \\\"vvvalue\\\" hello = \\\"world\\\" haha='what?'\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[PList[XMLNode]]
+            (pListEq[XMLNode] xmlNodeEqual)
+            (pListToString[XMLNode] xmlNodeToString)
+            (xmlAttrs `parsePString[PList[XMLNode]]` (pStringFromString "key = \"vvvalue\" hello = \"world\" haha='what?'"))
+            ((XMLAttr "key""vvvalue")
+                +>[XMLNode] ((XMLAttr "hello" "world")
+                +>[XMLNode] ((XMLAttr "haha" "what?")
+                +>[XMLNode] (Nil[XMLNode]))),
+             ((SourcePos "<default>" 1 45), pStringFromString ""))
+};
+
+let testElementSimple : TestFn = {
+    name = "xmlElement (pStringFromString \"<a></a>\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a></a>"))
+            (XMLElement "a" (Nil[XMLNode]) (Nil[XMLNode]),
+             ((SourcePos "<default>" 1 8), pStringFromString ""))
+};
+
+let testElementWithText : TestFn = {
+    name = "xmlElement (pStringFromString \"<a>ha?haha!</a>\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a>ha?haha!</a>"))
+            (XMLElement "a" (Nil[XMLNode]) (singleton[XMLNode] (XMLText "ha?haha!")),
+             ((SourcePos "<default>" 1 16), pStringFromString ""))
+};
+
+let testElementWithChildren : TestFn = {
+    name = "xmlElement (pStringFromString \"<a><b></b></a>\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a><b></b></a>"))
+            (XMLElement "a" (Nil[XMLNode])
+                (singleton[XMLNode] (XMLElement "b" (Nil[XMLNode]) (Nil[XMLNode]))),
+             ((SourcePos "<default>" 1 15), pStringFromString ""))
+};
+
+let testElementWithChildren2 : TestFn = {
+    name = "xmlElement (pStringFromString \"<a><b></b><c></c></a>\")",
+    fn   = \(__ : Unit) -> {
+        let b = XMLElement "b" (Nil[XMLNode]) (Nil[XMLNode]);
+        let c = XMLElement "c" (Nil[XMLNode]) (Nil[XMLNode]);
+        let a = XMLElement "a" (Nil[XMLNode]) (b +>[XMLNode] (c +>[XMLNode] (Nil[XMLNode])));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a><b></b><c></c></a>"))
+            (a, ((SourcePos "<default>" 1 22), pStringFromString ""))
+    }
+};
+
+let testElementWithAttr : TestFn = {
+    name = "xmlElement (pStringFromString \"<a href='/toosimple/sometimes/naive'>ha?haha!</a>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement
+                        "a"
+                        (singleton[XMLNode] (XMLAttr "href" "/toosimple/sometimes/naive"))
+                        (singleton[XMLNode] (XMLText "ha?haha!"));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a href='/toosimple/sometimes/naive'>ha?haha!</a>"))
+            (elem, ((SourcePos "<default>" 1 50), pStringFromString ""))
+    }
+};
+
+let testElementWithAttrWithChildren : TestFn = {
+    name = "xmlElement (pStringFromString \"<a href='/toosimple/sometimes/naive'><b></b></a>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement
+                        "a"
+                        (singleton[XMLNode] (XMLAttr "href" "/toosimple/sometimes/naive"))
+                        (singleton[XMLNode] (XMLElement "b" (Nil[XMLNode]) (Nil[XMLNode])));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a href='/toosimple/sometimes/naive'><b></b></a>"))
+            (elem, ((SourcePos "<default>" 1 49), pStringFromString ""))
+    }
+};
+
+let testElementSimple2 : TestFn = {
+    name = "xmlElement (pStringFromString \"<you young='too' simple='too'><naive>true</naive></you>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement
+                        "you"
+                        ((XMLAttr "young" "too")
+                            +>[XMLNode] ((XMLAttr "simple"  "too")
+                            +>[XMLNode] (Nil[XMLNode])))
+                        (singleton[XMLNode] (XMLElement "naive" (Nil[XMLNode])
+                            (singleton[XMLNode] (XMLText "true"))));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]`
+                (pStringFromString
+                    "<you young='too' simple='too'><naive>true</naive></you>"))
+            (elem, ((SourcePos "<default>" 1 56), pStringFromString ""))
+    }
+};
+
+let testElementSimpleEndTag : TestFn = {
+    name = "xmlElement (pStringFromString \"<a/>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement "a" (Nil[XMLNode]) (Nil[XMLNode]);
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a/>"))
+            (elem, ((SourcePos "<default>" 1 5), pStringFromString ""))
+    }
+};
+
+let testElementSimpleEndTag2 : TestFn = {
+    name = "xmlElement (pStringFromString \"<you young='too' simple='too'><naive><required/></naive></you>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement
+                        "you"
+                        ((XMLAttr "young" "too")
+                            +>[XMLNode] ((XMLAttr "simple" "too")
+                            +>[XMLNode] (Nil[XMLNode])))
+                        (singleton[XMLNode] (XMLElement "naive" (Nil[XMLNode])
+                            (singleton[XMLNode] (XMLElement "required" (Nil[XMLNode]) (Nil[XMLNode])))));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]`
+                (pStringFromString
+                    "<you young='too' simple='too'><naive><required/></naive></you>"))
+            (elem, ((SourcePos "<default>" 1 63), pStringFromString ""))
+    }
+};
+
+let testElementSimpleEndTag3 : TestFn = {
+    name = "xmlElement (pStringFromString \"<you young='too' simple='too'>\\n\\t<naive>\\n\\t\\t<required/>\\n\\t</naive>\\n</you>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement
+                        "you"
+                        ((XMLAttr "young" "too")
+                            +>[XMLNode] ((XMLAttr "simple" "too")
+                            +>[XMLNode] (Nil[XMLNode])))
+                        (singleton[XMLNode] (XMLElement "naive" (Nil[XMLNode])
+                            (singleton[XMLNode] (XMLElement "required" (Nil[XMLNode]) (Nil[XMLNode])))));
+
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]`
+                (pStringFromString
+                    "<you young='too' simple='too'>\n\t<naive>\n\t\t<required/>\n\t</naive>\n</you>"))
+            (elem, ((SourcePos "<default>" 5 7), pStringFromString ""))
+    }
+};
+
+let testElementSimpleEndTag4 : TestFn = {
+    name = "xmlElement (pStringFromString \"<a href='https://github.com/hkuplg/fcore'/>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement
+                        "a"
+                        (singleton[XMLNode] (XMLAttr "href"
+                                                     "https://github.com/hkuplg/fcore"))
+                        (Nil[XMLNode]);
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<a href='https://github.com/hkuplg/fcore'/>"))
+            (elem, ((SourcePos "<default>" 1 44), pStringFromString ""))
+    }
+};
+
+let testCDataSimple : TestFn = {
+    name = "xmlCData (pStringFromString \"<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>\"",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLCData "function matchwo(a,b) { if (a < b && a < 0) then }";
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlCData `parsePString[XMLNode]` (pStringFromString "<![CDATA[function matchwo(a,b) { if (a < b && a < 0) then }]]>"))
+            (elem, ((SourcePos "<default>" 1 63), pStringFromString ""))
+    }
+};
+
+let testElementWithCData : TestFn = {
+    name = "xmlElement (pStringFromString \"<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>\"",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLElement "script" (Nil[XMLNode])
+                        (singleton[XMLNode] (XMLCData "function matchwo(a,b) { &&<>!!!?; }"));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlElement `parsePString[XMLNode]` (pStringFromString "<script><![CDATA[function matchwo(a,b) { &&<>!!!?; }]]></script>"))
+            (elem, ((SourcePos "<default>" 1 65), pStringFromString ""))
+    }
+};
+
+let testProcInst : TestFn = {
+    name = "xmlProcInst (pStringFromString \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLProcInst "xml"
+                        ((XMLAttr "version" "1.0")
+                            +>[XMLNode] ((XMLAttr "encoding" "UTF-8")
+                            +>[XMLNode] (Nil[XMLNode])));
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlProcInst `parsePString[XMLNode]` (pStringFromString "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"))
+            (elem, ((SourcePos "<default>" 1 40), pStringFromString ""))
+    }
+};
+
+let testProcInst2 : TestFn = {
+    name = "xmlProcInst (pStringFromString \"<?xml-stylesheet ?>\")",
+    fn   = \(__ : Unit) -> {
+        let elem = XMLProcInst "xml-stylesheet" (Nil[XMLNode]);
+        assertFirstParseOutputEq[XMLNode]
+            xmlNodeEqual
+            xmlNodeToString
+            (xmlProcInst `parsePString[XMLNode]` (pStringFromString "<?xml-stylesheet ?>"))
+            (elem, ((SourcePos "<default>" 1 20), pStringFromString ""))
+    }
+};
+
+let testNaiveXMLParserSuite : TestSuite = {
+    name = "Test Naive XML Parser",
+    fns  = testXMLComment
+                +>[TestFn] (testXMLDoubleQuotedString
+                +>[TestFn] (testXMLSingleQuotedString
+                +>[TestFn] (testXMLText
+                +>[TestFn] (testXMLTextEmpty
+                +>[TestFn] (testXMLAttr
+                +>[TestFn] (testXMLAttrs
+                +>[TestFn] (testElementSimple
+                +>[TestFn] (testElementWithText
+                +>[TestFn] (testElementWithChildren
+                +>[TestFn] (testElementWithChildren2
+                +>[TestFn] (testElementWithAttr
+                +>[TestFn] (testElementWithAttrWithChildren
+                +>[TestFn] (testElementSimple2
+                +>[TestFn] (testElementSimpleEndTag
+                +>[TestFn] (testElementSimpleEndTag2
+                +>[TestFn] (testElementSimpleEndTag3
+                +>[TestFn] (testElementSimpleEndTag4
+                +>[TestFn] (testCDataSimple
+                +>[TestFn] (testElementWithCData
+                +>[TestFn] (testProcInst
+                +>[TestFn] (testProcInst2
+                +>[TestFn] (Nil[TestFn]))))))))))))))))))))))
+};

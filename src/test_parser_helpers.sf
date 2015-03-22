@@ -1,0 +1,18 @@
+{-# INCLUDE "eq.sf" #-}
+{-# INCLUDE "show.sf" #-}
+{-# INCLUDE "plist.sf" #-}
+{-# INCLUDE "maybe.sf" #-}
+{-# INCLUDE "parser_modular.sf" #-}
+{-# INCLUDE "testfx.sf" #-}
+
+let firstParseOutputEq[A] (eq : Eq[A]) (r : ParseOutput[A]) (expected : ParseContext[A]) : Bool =
+    case first[ParseContext[A]] r of
+        Nothing         -> False
+     |  Just x          -> parseContextEq[A] eq x expected;
+
+let assertFirstParseOutputEq[A] (eq : Eq[A]) (show : Show[A]) (src : ParseOutput[A]) (expected : ParseContext[A]) =
+    if firstParseOutputEq[A] eq src expected then
+        ()
+    else
+        error "Assert failed!\n\tExpecting the 1st result: \{parseContextToString[A] show expected}"
+                    .concat("\n\tBut found output        : \{parseOutputToString[A] show src}");

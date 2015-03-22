@@ -1,0 +1,130 @@
+{-# INCLUDE "thunk.sf" #-}
+{-# INCLUDE "maybe.sf" #-}
+{-# INCLUDE "eq.sf" #-}
+
+-- ADT List
+data PList[A] = Nil
+              | Cons A (Thunk[PList[A]])
+              ;
+
+let rec nats (beg : Int) : PList[Int] =
+    Cons[Int] beg (\(__ : Unit) -> nats (beg+1));
+
+-- Utilities
+
+let singleton[A] (x : A) : PList[A] =
+    Cons[A] x (\(__: Unit) -> (Nil[A]));
+
+let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[B] =
+    case l of
+        Nil             ->      Nil[B]
+     |  Cons x xs       ->      Cons[B] (f x) (\(__ : Unit) -> (map[A, B] f (invoke[PList[A]] xs)));
+
+let rec foldl[A, B] (f : B -> A -> B) (z : B) (l : PList[A]) : B =
+    case l of
+        Nil             ->      z
+     |  Cons x xs       ->      foldl[A, B] f (f z x) (invoke[PList[A]] xs);
+
+--let rec foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+--    case l of
+--        Nil             ->      z
+--     |  Cons x xs       ->      f x (foldr[A, B] f z (invoke[PList[A]] xs));
+
+let foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+    let rec inner (s : PList[A]) (k : B -> B) : B =
+        case s of
+            Nil         -> k z
+         |  Cons x xs   -> inner (invoke[PList[A]] xs) (\(y : B) -> k (f x y));
+     inner l (\(x : B) -> x);
+
+
+let join[A] (l : PList[A]) (j : A) : PList[A] =
+    let rec inner[A] (l : PList[A]) (j : A) : PList[A] =
+        case l of
+            Nil         -> (Nil[A])
+         |  Cons x xs   -> (Cons[A] j (\(__ : Unit) ->
+                                (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j))));
+    case l of
+        Nil         -> (Nil[A])
+     |  Cons x xs   -> (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j));
+
+let (+>)[A] (a : A) (l : PList[A]) : PList[A] =
+    Cons[A] a (\(__ : Unit) -> l);
+
+let rec concat2[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+    case a of
+        Nil         ->  b
+      | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (concat2[A] (invoke[PList[A]] xs) b));
+
+let rec lazyconcat2[A] (a : PList[A]) (b : Thunk[PList[A]]) : PList[A] =
+    case a of
+        Nil         ->  (invoke[PList[A]] b)
+      | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (lazyconcat2[A] (invoke[PList[A]] xs) b));
+
+let (++)[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+    concat2[A] a b;
+
+let (+~)[A] (a : PList[A]) (b : Thunk[PList[A]]) : PList[A] =
+    lazyconcat2[A] a b;
+
+let rec concat[A] (l : PList[PList[A]]) : PList[A] =
+    case l of
+        Nil         ->  Nil[A]
+     |  Cons x xs   ->  x +~[A] (\(__ : Unit) -> (concat[A] (invoke[PList[PList[A]]] xs)));
+
+let rec len[A] (l : PList[A]) : Int =
+    case l of
+        Nil         ->  0
+     |  Cons _ xs   ->  1 + (len[A] (invoke[PList[A]] xs));
+
+let isempty[A] (l : PList[A]) : Bool =
+    case l of
+        Nil         -> True
+     |  Cons _ _    -> False;
+
+let first[A] (l : PList[A]) : Maybe[A] =
+    case l of
+        Nil         -> Nothing[A]
+     |  Cons x _    -> Just[A] x;
+
+let rest[A] (l : PList[A]) : Maybe[PList[A]] =
+    case l of
+        Nil         -> Nothing[PList[A]]
+     |  Cons _ xs   -> Just[PList[A]] (invoke[PList[A]] xs);
+
+let rec take[A] (n : Int) (l : PList[A]) : PList[A] =
+    if n <= 0 then
+        (Nil[A])
+    else
+        case l of
+            Nil         ->  Nil[A]
+         |  Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (take[A] (n-1) (invoke[PList[A]] xs)));
+
+let rec zip[A, B] (a : PList[A]) (b : PList[B]) : PList[(A, B)] =
+    case a of
+        Nil         -> Nil[(A, B)]
+     |  Cons xa xsa ->
+            case b of
+                Nil         -> Nil[(A, B)]
+             |  Cons xb xsb ->
+                    Cons[(A, B)] (xa, xb) (\(__ : Unit) -> zip[A, B] (invoke[PList[A]] xsa) (invoke[PList[B]] xsb));
+
+let pListToString[A] (tostr : A -> String) (l : PList[A]) : String =
+    type StringBuilder = java.lang.StringBuilder;
+
+    let inner = foldl[String, StringBuilder]
+                    (\(b : StringBuilder) (a : String) -> b.append(a))
+                    (new java.lang.StringBuilder("["))
+                    (join[String] (map[A, String] tostr l) ", ");
+
+    inner.append("]").toString();
+
+let rec pListEq[A] (eq : Eq[A]) (a : PList[A]) (b : PList[A]) : Bool =
+    case a of
+        Nil         -> { case b of Nil -> True | Cons _ _ -> False }
+     |  Cons ax axs ->
+            case b of
+                Nil         -> False
+             |  Cons bx bxs -> if eq ax bx then
+                                    pListEq[A] eq (invoke[PList[A]] axs) (invoke[PList[A]] bxs)
+                               else False;

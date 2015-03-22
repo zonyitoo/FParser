@@ -1,0 +1,24 @@
+{-# INCLUDE "parser_modular.sf" #-}
+
+-- Simple arithmetic expression
+
+let bracket[B] (p : Parser[B]) : Parser[B] =
+    between[Char, Char, B] (char '(') (char ')') p;
+
+let operation =
+    let addop (a : Int) (b : Int) : Int = a + b;
+    let subop (a : Int) (b : Int) : Int = a - b;
+    let mulop (a : Int) (b : Int) : Int = a * b;
+    let divop (a : Int) (b : Int) : Int = a / b;
+
+    let add = (char '+') $>[Char, Int -> Int -> Int] addop;
+    let sub = (char '-') $>[Char, Int -> Int -> Int] subop;
+    let mul = (char '*') $>[Char, Int -> Int -> Int] mulop;
+    let div = (char '/') $>[Char, Int -> Int -> Int] divop;
+
+    add `choice[Int -> Int -> Int]` sub `choice[Int -> Int -> Int]` mul `choice[Int -> Int -> Int]` div;
+
+let rec expr : Parser[Int] =
+    \(s : ParseInput) -> chainl1[Int] factor operation s
+and factor : Parser[Int] =
+    \(s : ParseInput) -> choice[Int] natural (bracket[Int] expr) s;

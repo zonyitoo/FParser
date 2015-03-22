@@ -1,0 +1,212 @@
+{-#
+    INCLUDE "plist.sf"
+    INCLUDE "pstring.sf"
+    INCLUDE "parser_modular.sf"
+#-}
+
+-- Naive XML Parser
+
+data XMLNode = XMLText      String
+             | XMLAttr      String String
+             | XMLElement   String PList[XMLNode] PList[XMLNode]
+             | XMLCData     String
+             | XMLComment   String
+             | XMLProcInst  String PList[XMLNode]
+             ;
+
+let rec xmlNodeEqual (a : XMLNode) (b : XMLNode) : Bool =
+    case a of
+        XMLText stra            -> {
+            case b of
+                XMLText strb                    -> stringEq stra strb
+             |  XMLComment str                  -> False
+             |  XMLAttr key val                 -> False
+             |  XMLCData cdata                  -> False
+             |  XMLProcInst t attrs             -> False
+             |  XMLElement tag attrs children   -> False
+        }
+     |  XMLComment stra         -> {
+            case b of
+                XMLText strb                    -> False
+             |  XMLComment strb                 -> stringEq stra strb
+             |  XMLAttr key val                 -> False
+             |  XMLCData cdata                  -> False
+             |  XMLProcInst t attrs             -> False
+             |  XMLElement tag attrs children   -> False
+        }
+     |  XMLAttr keya vala       -> {
+            case b of
+                XMLText strb                    -> False
+             |  XMLComment strb                 -> False
+             |  XMLAttr keyb valb               -> (stringEq keya keyb) && (stringEq vala valb)
+             |  XMLCData cdata                  -> False
+             |  XMLProcInst t attrs             -> False
+             |  XMLElement tag attrs children   -> False
+        }
+     |  XMLCData cdataa         -> {
+            case b of
+                XMLText strb                    -> False
+             |  XMLComment strb                 -> False
+             |  XMLAttr key val                 -> False
+             |  XMLCData cdatab                 -> stringEq cdataa cdatab
+             |  XMLProcInst t attrs             -> False
+             |  XMLElement tag attrs children   -> False
+        }
+     |  XMLProcInst ta attrsa   -> {
+            case b of
+                XMLText strb                    -> False
+             |  XMLComment strb                 -> False
+             |  XMLAttr key val                 -> False
+             |  XMLCData cdatab                 -> False
+             |  XMLProcInst tb attrsb           ->
+                    ((stringEq ta tb) && (pListEq[XMLNode] xmlNodeEqual attrsa attrsb))
+             |  XMLElement tag attrs children   -> False
+        }
+     |  XMLElement taga attrsa childrena    -> {
+            case b of
+                XMLText strb                        -> False
+             |  XMLComment str                      -> False
+             |  XMLAttr key val                     -> False
+             |  XMLCData cdata                      -> False
+             |  XMLProcInst t attrs                 -> False
+             |  XMLElement tagb attrsb childrenb    ->
+                    (stringEq taga tagb)
+                        && (pListEq[XMLNode] xmlNodeEqual attrsa attrsb)
+                        && (pListEq[XMLNode] xmlNodeEqual childrena childrenb)
+        };
+
+let rec xmlNodeToString (xml : XMLNode) : String =
+    case xml of
+        XMLText str         -> "XMLText \{str}"
+     |  XMLComment str      -> "XMLComment \{str}"
+     |  XMLAttr key val     -> "XMLAttr \{key} \{val}"
+     |  XMLCData cdata      -> "XMLCData \{cdata}"
+     |  XMLProcInst t attrs
+            -> "XMLProcInst \{t} \{pListToString[XMLNode] xmlNodeToString attrs}"
+     |  XMLElement tag attrs children
+            -> "XMLElement \{tag} \{pListToString[XMLNode] xmlNodeToString attrs} \{pListToString[XMLNode] xmlNodeToString children}";
+
+--let xmlComment : Parser[PList[Char]] =
+--    bind[PString, PList[Char]]     (string (pStringFromString "<!--")) (\(cstart : PString) ->
+--    bind[PList[Char], PList[Char]] (many[Char] item) (\(comment : PList[Char]) ->
+--    bind[PString, PList[Char]]     (string (pStringFromString "-->")) (\(cend : PString) ->
+--    result[PList[Char]] comment)));
+
+let xmlComment : Parser[XMLNode] =
+    (string "<!--")
+        *>[PString, PList[Char]] (many[Char] item)
+        <*[PList[Char], PString] (string "-->")
+        <$>[PList[Char], XMLNode] (\(cmt : PList[Char]) -> XMLComment (pStringToString cmt));
+
+--let xmlSpace : Parser[Unit] =
+--    only[Unit]
+--        (bind[PList[Char], Unit] (many[Char] whitespace) (\(sp1 : PList[Char]) ->
+--         bind[PList[Char], Unit] xmlComment              (\(cmt : PList[Char]) ->
+--         bind[PList[Char], Unit] (many[Char] whitespace) (\(sp2 : PList[Char]) ->
+--         result[Unit] ()))));
+let xmlSpace : Parser[Unit] =
+    only[Unit]
+        (choice[Unit]
+            (bind[PList[Char], Unit] (many[Char] whitespace) (\(__ : PList[Char]) -> result[Unit] ()))
+            (bind[PList[Char], Unit] (many[Char] whitespace) (\(sp1 : PList[Char]) ->
+             bind[XMLNode, Unit]     xmlComment              (\(cmt : XMLNode) ->
+             bind[PList[Char], Unit] (many[Char] whitespace) (\(sp2 : PList[Char]) ->
+             result[Unit] ())))));
+
+-- Normal version
+let xmlEscapedChar : Parser[Char] =
+    let quot = (string "&quot;") $>[PString, Char] '"';
+    let apos = (string "&apos;") $>[PString, Char] '\'';
+    let lt = (string "&lt;")     $>[PString, Char] '<';
+    let gt = (string "&gt;")     $>[PString, Char] '>';
+    let amp = (string "&amp;")   $>[PString, Char] '&';
+
+    quot `choice[Char]` apos `choice[Char]` lt `choice[Char]` gt `choice[Char]` amp;
+
+let xmlEscapedCodePoint : Parser[PString] =
+    (string "&#x")
+        *>[PString, Int] hexdecimal
+        <*[Int, Char] (char ';')
+        <$>[Int, PString] (\(codep : Int) ->
+                (pStringFromString (new java.lang.String(java.lang.Character.toChars(codep)))));
+
+let xmlChar : Parser[Char] =
+    xmlEscapedChar <|>[Char] (noneof "\"'<>&");
+
+let xmlString : Parser[PString] =
+    many1[Char] xmlChar
+       <|>[PString] xmlEscapedCodePoint;
+
+let xmlDoubleQuotedString : Parser[PString] =
+    (char '"') *>[Char, PString] xmlString <*[PString, Char] (char '"');
+
+let xmlSingleQuotedString : Parser[PString] =
+    (char '\'') *>[Char, PString] xmlString <*[PString, Char] (char '\'');
+
+let xmlQuotedString : Parser[PString] =
+    choice[PString] xmlDoubleQuotedString xmlSingleQuotedString;
+
+let xmlText : Parser[XMLNode] =
+    xmlString <$>[PString, XMLNode] (\(content : PString) -> XMLText (pStringToString content));
+
+let xmlCData : Parser[XMLNode] =
+    string "<![CDATA["
+        *>[PString, PList[Char]] (many[Char] item)
+            <$>[PList[Char], XMLNode] (\(cd : PList[Char]) -> XMLCData (pStringToString cd))
+        <*[XMLNode, PString] (string "]]>");
+
+let xmlKey : Parser[PString] =
+    many1[Char] (letter <|>[Char] (char '-'));
+
+let xmlAttr : Parser[XMLNode] =
+    bind[PString, XMLNode]  xmlKey                                                          (\(key : PString) ->
+    bind[PString, XMLNode]  (xmlSpace >>[Unit, Char] (char '=')
+                                         >>[Char, Unit] xmlSpace
+                                         >>[Unit, PString] xmlQuotedString)                 (\(val : PString) ->
+    result[XMLNode] (XMLAttr (pStringToString key) (pStringToString val))));
+
+let xmlAttrs : Parser[PList[XMLNode]] =
+    sepby[XMLNode, Unit] xmlAttr xmlSpace;
+
+let xmlEndTag (tag : PString) : Parser[Unit] =
+    (string "</")
+        >>[PString, Unit]   xmlSpace
+        >>[Unit, PString]   (stringWithPString tag)
+        >>[PString, Unit]   xmlSpace
+        >>[Unit, Char]      (char '>')
+        $>[Char, Unit]      ();
+
+let rec xmlElement : Parser[XMLNode] =
+    (char '<') >>[Char, Unit] xmlSpace >>[Unit, PString] xmlKey >>=[PString, XMLNode] (\(tag : PString) ->
+        xmlSpace >>[Unit, PList[XMLNode]] xmlAttrs >>=[PList[XMLNode], XMLNode] (\(attrs : PList[XMLNode]) ->
+            -- Normal ends
+            ((char '>') >>[Char, Unit] xmlSpace >>[Unit, PList[XMLNode]]
+                xmlElementChildren <*[PList[XMLNode], Unit] xmlSpace <*[PList[XMLNode], Unit] (xmlEndTag tag)
+                    <$>[PList[XMLNode], XMLNode] (\(ch : PList[XMLNode]) -> XMLElement (pStringToString tag) attrs ch))
+
+            <|>[XMLNode]
+
+            -- Short ends
+            ((string "/>")
+                >>[PString, XMLNode] (result[XMLNode] (XMLElement (pStringToString tag) attrs (Nil[XMLNode]))))))
+
+and xmlElementChildren : Parser[PList[XMLNode]] =
+    (xmlCData <$>[XMLNode, PList[XMLNode]] (\(c : XMLNode) -> singleton[XMLNode] c)
+        <|>[PList[XMLNode]] (xmlText `using[XMLNode, PList[XMLNode]]` (\(n : XMLNode) -> singleton[XMLNode] n))
+        <|>[PList[XMLNode]] (sepby1[XMLNode, Unit] xmlElement xmlSpace))
+    <|>[PList[XMLNode]] (result[PList[XMLNode]] (Nil[XMLNode]));
+
+let xmlProcInst : Parser[XMLNode] =
+    (string "<?") >>[PString, Unit] xmlSpace
+        >>[Unit, PString] xmlKey >>=[PString, XMLNode] (\(target : PString) ->
+            xmlSpace >>[Unit, PList[XMLNode]] xmlAttrs
+                <*[PList[XMLNode], PString] (xmlSpace >>[Unit, PString] (string "?>"))
+                    >>=[PList[XMLNode], XMLNode] (\(conts : PList[XMLNode]) ->
+                        result[XMLNode] (XMLProcInst (pStringToString target) conts)));
+
+let parseXML : Parser[PList[XMLNode]] =
+    (many[XMLNode] xmlProcInst)
+        >>=[PList[XMLNode], PList[XMLNode]] (\(procinst1 : PList[XMLNode]) ->
+            xmlElement >>=[XMLNode, PList[XMLNode]] (\(root : XMLNode) ->
+                (many[XMLNode] xmlProcInst) >>=[PList[XMLNode], PList[XMLNode]] (\(procinst2 : PList[XMLNode]) ->
+                    result[PList[XMLNode]] (procinst1 ++[XMLNode] (root +>[XMLNode] procinst2)))));

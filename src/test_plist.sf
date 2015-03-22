@@ -1,0 +1,51 @@
+{-# INCLUDE "pstring.sf" #-}
+{-# INCLUDE "testfx.sf" #-}
+
+let testListEqual : TestFn = {
+    name = "pListEq",
+    fn   = \(__ : Unit) ->
+        assertEq[PList[Int]]
+            (pListEq[Int] intEq)
+            (pListToString[Int] intToString)
+            (singleton[Int] 1)
+            (singleton[Int] 1)
+};
+
+let testMap : TestFn = {
+    name = "map",
+    fn   = \(__ : Unit) ->
+        assertEq[PList[Char]]
+            (pListEq[Char] charEq)
+            pStringToString
+            (map[Char, Char] (\(c : Char) -> 'm') (pStringFromString "hello"))
+            (pStringFromString "mmmmm")
+};
+
+let testFoldr : TestFn = {
+    name = "foldr",
+    fn   = \(__ : Unit) ->
+        assertEq[Int]
+            intEq
+            intToString
+            (foldr[Int,Int] (\(a : Int) (b : Int) -> a + b) 0 (take[Int] 5 (nats 1)))
+            15
+};
+
+let testFoldl : TestFn = {
+    name = "foldl",
+    fn   = \(__ : Unit) ->
+        assertEq[Int]
+            intEq
+            intToString
+            (foldl[Int,Int] (\(b : Int) (a : Int) -> a + b) 0 (take[Int] 5 (nats 1)))
+            15
+};
+
+let testUtilitiesSuite : TestSuite = {
+    name = "Test Utilities",
+    fns  = testListEqual
+                +>[TestFn] (testMap
+                +>[TestFn] (testFoldr
+                +>[TestFn] (testFoldl
+                +>[TestFn] (Nil[TestFn]))))
+};

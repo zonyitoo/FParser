@@ -47,11 +47,14 @@ def process_file(f, search_path, visited_files):
         trimed = line.strip()
 
         if trimed.startswith('{-#'):
-            pragma = [line]
-            line = f.readline()
-            while line != '' and not line.strip().endswith('#-}'):
+            pragma = []
+            while not line.strip().endswith('#-}'):
+                if line == '':
+                    break
                 pragma.append(line)
                 line = f.readline()
+            else:
+                pragma.append(line)
 
             pragmas = ''.join(pragma)
             includes = PRAGMA_INCLUDE_RE.findall(pragmas)

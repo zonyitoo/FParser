@@ -42,23 +42,17 @@ def process_file(f, search_path, visited_files):
     logger.debug('Processing %s' % f.name)
     lines = []
 
-    processing_pragma = False
-    pragma = []
-
-    for line in f.readlines():
+    line = f.readline()
+    while line != '':
         trimed = line.strip()
 
-        if trimed.startswith('{-#') and not processing_pragma:
-            processing_pragma = True
-            pragma.append(line)
+        if trimed.startswith('{-#'):
+            pragma = [line]
+            line = f.readline()
+            while line != '' and not line.strip().endswith('#-}'):
+                pragma.append(line)
+                line = f.readline()
 
-        if trimed.endswith('#-}') and processing_pragma:
-            processing_pragma = False
-
-        if processing_pragma:
-            pragma.append(line)
-            continue
-        elif len(pragma) != 0:
             pragmas = ''.join(pragma)
             includes = PRAGMA_INCLUDE_RE.findall(pragmas)
             pragma = []
@@ -93,9 +87,9 @@ def process_file(f, search_path, visited_files):
 
             lines += current_visited
         else:
-            if line.strip().startswith('--'):
-                continue
-            lines.append(line)
+            if not trimed.startswith('--'):
+                lines.append(line)
+        line = f.readline()
 
     return ''.join(lines), visited_files
 
@@ -109,6 +103,9 @@ def main():
     output = open(args['output'][0], 'w+') if args['output'] is not None else sys.stdout
 
     visited_files = {os.path.abspath(args['target'])} if args['target'] is not None else set()
+
+    if args['output'] is None:
+        logger.setLevel(logging.NOTSET)
 
     logger.info('Target: %s' % target.name)
     logger.info('Include Path: %s' % include_path)

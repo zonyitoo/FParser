@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from __future__ import unicode_literals, absolute_import, print_function\
+from __future__ import unicode_literals, absolute_import, print_function
 
 import argparse
 import os
 import sys
 import re
+import logging
 
 DEFAULT_INCLUDE_PATH = ['.']
 PRAGMA_INCLUDE_RE = re.compile(r'INCLUDE\s+"([^"\']*)"')
+
+logging.basicConfig(format="%(asctime)-15s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def parse_arguments():
@@ -34,6 +39,7 @@ def parse_arguments():
 
 
 def process_file(f, search_path, visited_files):
+    logger.debug('Processing %s' % f.name)
     lines = []
 
     processing_pragma = False
@@ -60,12 +66,15 @@ def process_file(f, search_path, visited_files):
             current_visited = []
 
             for inc in includes:
+                logger.debug('Found include %s in %s' % (inc, f.name))
                 for sp in search_path:
                     full = os.path.join(sp, inc)
+                    logger.debug('Trying %s' % full)
                     if not os.path.exists(full):
                         continue
 
                     if full in visited_files:
+                        logger.debug('Already included %s' % inc)
                         break
                     else:
                         visited_files.add(full)
@@ -75,7 +84,7 @@ def process_file(f, search_path, visited_files):
                     procceed, _ = process_file(includef, search_path, visited_files)
 
                     if not procceed.rstrip().endswith(';'):
-                        raise RuntimeError('Included file should not have the last expression, %s', repr(includef))
+                        raise RuntimeError('Included file should not have the last expression, %s', includef.name)
 
                     current_visited.append(procceed)
                     break
@@ -100,6 +109,10 @@ def main():
     output = open(args['output'][0], 'w+') if args['output'] is not None else sys.stdout
 
     visited_files = {os.path.abspath(args['target'])} if args['target'] is not None else set()
+
+    logger.info('Target: %s' % target.name)
+    logger.info('Include Path: %s' % include_path)
+    logger.info('Output: %s' % output.name)
 
     processed, _ = process_file(target, include_path, visited_files)
     output.write(processed)

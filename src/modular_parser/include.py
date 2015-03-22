@@ -61,7 +61,7 @@ def process_file(f, search_path, visited_files):
 
             for inc in includes:
                 for sp in search_path:
-                    full = os.path.join(os.path.abspath(sp), inc)
+                    full = os.path.join(sp, inc)
                     if not os.path.exists(full):
                         continue
 
@@ -95,6 +95,7 @@ def main():
     args = parse_arguments()
 
     include_path = args['additional_include_path'] + DEFAULT_INCLUDE_PATH
+    include_path = [os.path.abspath(p) for p in include_path]
     target = open(args['target'], 'r') if args['target'] is not None else sys.stdin
     output = open(args['output'][0], 'w+') if args['output'] is not None else sys.stdout
 

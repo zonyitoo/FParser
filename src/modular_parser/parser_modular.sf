@@ -2,6 +2,7 @@
 {-#
   INCLUDE "prelude.sf"
   INCLUDE "plist.sf"
+  INCLUDE "pstring.sf"
 #-}
 
 -- State definition

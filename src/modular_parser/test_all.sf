@@ -12,4 +12,8 @@ let parserTestSuites : PList[TestSuite] =
         +>[TestSuite] (testNaiveXMLParserSuite
         +>[TestSuite] (Nil[TestSuite]))));
 
-runTestSuites parserTestSuites
+{
+    runTestSuites parserTestSuites;
+
+    "-- END --"
+}

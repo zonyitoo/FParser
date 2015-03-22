@@ -1,9 +1,7 @@
 
-test: test_all.sfc
-	f2j -r $< -m stack --inline
-
-test_all.sfc: test_all.sf
-	python include.py $< -o $@
+test: test_all.sf
+	python include.py $< -o $<c
+	f2j -r $<c -m stack --inline
 
 .PHONY:
 clean:

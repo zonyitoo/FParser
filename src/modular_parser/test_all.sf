@@ -15,5 +15,5 @@ let parserTestSuites : PList[TestSuite] =
 {
     runTestSuites parserTestSuites;
 
-    "-- END --"
+    "\n-- END --"
 }

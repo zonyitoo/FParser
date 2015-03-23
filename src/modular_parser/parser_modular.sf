@@ -399,6 +399,14 @@ let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
     bind[PList[A], PList[A]] (many[A] (rep[A, B] p)) (\(xs : PList[A]) ->
     result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
 
+-- The `sep` has to appear at least once
+let sepby2[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
+    let rep[A, B] (p : Parser[A]) : Parser[A] =
+        bind[B, A] sep (\(s : B) -> bind[A, A] p (\(y : A) -> result[A] y));
+    bind[A, PList[A]]        p                       (\(x : A) ->
+    bind[PList[A], PList[A]] (many1[A] (rep[A, B] p)) (\(xs : PList[A]) ->
+    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
+
 let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
     choice[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
 

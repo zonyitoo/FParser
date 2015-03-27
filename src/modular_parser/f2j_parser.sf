@@ -69,25 +69,33 @@ let f2jADTAlternativeToString (a : F2JADTAlternative) : String =
         F2JADTAlternative name args ->
             "F2JADTAlternative \{name} \{pListToString[F2JType] f2jTypeToString args}";
 
+data F2JADTBody = F2JADTBody F2JType PList[F2JADTAlternative];
+
+let f2jADTBodyToString (a : F2JADTBody) : String =
+    case a of
+        F2JADTBody t alts ->
+            "F2JADTBody \{f2jTypeToString t} \{pListToString[F2JADTAlternative] f2jADTAlternativeToString alts}";
+
 data rec
     F2JBindingBody = F2JLetBindingBody     String PList[F2JType] PList[F2JBindingParam] Maybe[F2JType] F2JExpr
-                   | F2JLetRecBindingBody  String PList[F2JType] PList[F2JBindingParam] F2JType F2JExpr
+                   | F2JLetRecBindingBody  String PList[F2JType] PList[F2JBindingParam] F2JType        F2JExpr
 
 and F2JApplicationParam = F2JApplicationParamExpr F2JExpr
                         | F2JApplicationParamType PList[F2JType]
 
             -- Application
 and F2JExpr = F2JApplication   F2JExpr                F2JApplicationParam
-            -- Let binding                            and           ; expr
-            | F2JLet           F2JBindingBody         PList[F2JExpr] F2JExpr
-            -- Let rec binding                        and           ; expr
-            | F2JLetRec        F2JBindingBody         PList[F2JExpr] F2JExpr
+            -- Let binding                            ; expr
+            | F2JLet           PList[F2JBindingBody]  F2JExpr
+            -- Let rec binding                        ; expr
+            | F2JLetRec        PList[F2JBindingBody]  F2JExpr
             -- Lambda function params                 inner expr
             | F2JLambda        PList[F2JBindingParam] F2JExpr
             -- case of
             -- | F2JCase          F2JExpr PList[(F2JCaseAlternative, F2JExpr)]
             -- ADT
-            | F2JADT           F2JType PList[F2JADTAlternative] F2JExpr
+            | F2JADT           PList[F2JADTBody] F2JExpr
+            | F2JRecADT        PList[F2JADTBody] F2JExpr
             -- Alias
             | F2JTypeAlias     F2JType F2JType F2JExpr
             -- Tuple
@@ -122,14 +130,16 @@ and f2jExprToString (e : F2JExpr) : String =
     case e of
         F2JApplication expr param ->
             "F2JApplication \{f2jExprToString expr} \{f2jApplicationParamToString param}"
-     |  F2JLet body andexpr expr ->
-            "F2JLet \{f2jBindingBodyToString body} \{pListToString[F2JExpr] f2jExprToString andexpr} \{f2jExprToString expr}"
-     |  F2JLetRec body andexpr expr ->
-            "F2JLetRec \{f2jBindingBodyToString body} \{pListToString[F2JExpr] f2jExprToString andexpr} \{f2jExprToString expr}"
+     |  F2JLet body expr ->
+            "F2JLet \{pListToString[F2JBindingBody] f2jBindingBodyToString body} \{f2jExprToString expr}"
+     |  F2JLetRec body expr ->
+            "F2JLetRec \{pListToString[F2JBindingBody] f2jBindingBodyToString body} \{f2jExprToString expr}"
      |  F2JLambda params expr ->
             "F2JLambda \{pListToString[F2JBindingParam] f2jBindingParamToString params}, \{f2jExprToString expr}"
-     |  F2JADT t alts expr ->
-            "F2JADT \{f2jTypeToString t}, \{pListToString[F2JADTAlternative] f2jADTAlternativeToString alts}, \{f2jExprToString expr}"
+     |  F2JADT body expr ->
+            "F2JADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
+     |  F2JRecADT body expr ->
+            "F2JRecADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
      |  F2JTypeAlias t target expr ->
             "F2JTypeAlias \{f2jTypeToString t}, \{f2jTypeToString target}, \{f2jExprToString expr}"
      |  F2JPair conts ->
@@ -280,6 +290,18 @@ let rec f2jVariable : Parser[F2JExpr] =
     (f2jBindingName <$>[PString, F2JExpr] (\(s : PString) -> F2JVariable (pStringToString s)))
         <|>[F2JExpr] f2jVariableWithBracket;
 
+let f2jADTBody : Parser[F2JADTBody] =
+    let f2jADTAlternative : Parser[F2JADTAlternative] =
+        (f2jTypeName <*[PString, Unit] f2jSpace) >>=[PString, F2JADTAlternative] (\(tname : PString) ->
+            (sepby[F2JType, Unit] f2jType f2jSpace) >>=[PList[F2JType], F2JADTAlternative] (\(types : PList[F2JType]) ->
+                result[F2JADTAlternative] (F2JADTAlternative (pStringToString tname) types)));
+
+    (f2jNormalType <*[F2JType, Unit] (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace))
+        >>=[F2JType, F2JADTBody] (\(t : F2JType) ->
+            sepby1[F2JADTAlternative, Unit] f2jADTAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace)
+                >>=[PList[F2JADTAlternative], F2JADTBody] (\(alts : PList[F2JADTAlternative]) ->
+                    result[F2JADTBody] (F2JADTBody t alts)));
+
 -- type T = ...
 let rec f2jTypeAlias : Parser[F2JExpr] =
     ((string "type") <*[PString, Unit] f2jSpace)
@@ -292,15 +314,19 @@ let rec f2jTypeAlias : Parser[F2JExpr] =
 
 -- data T = ...
 and f2jADT : Parser[F2JExpr] =
-    let f2jADTAlternative : Parser[F2JADTAlternative] =
-        (f2jTypeName <*[PString, Unit] f2jSpace) >>=[PString, F2JADTAlternative] (\(tname : PString) ->
-            (sepby[F2JType, Unit] f2jType f2jSpace) >>=[PList[F2JType], F2JADTAlternative] (\(types : PList[F2JType]) ->
-                result[F2JADTAlternative] (F2JADTAlternative (pStringToString tname) types)));
-    ((string "data") <*[PString, Unit] f2jSpace) >>[PString, F2JType]
-        (f2jNormalType <*[F2JType, Unit] (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace)) >>=[F2JType, F2JExpr] (\(t : F2JType) ->
-            (sepby1[F2JADTAlternative, Unit] f2jADTAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace)) >>=[PList[F2JADTAlternative], F2JExpr] (\(alts : PList[F2JADTAlternative]) ->
-                (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace) >>[Unit, F2JExpr] f2jExpr >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
-                    (result[F2JExpr] (F2JADT t alts expr)))))
+    (string "data" >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        ((string "rec") >>[PString, Unit] f2jSpace >>[Unit, PList[F2JADTBody]]
+            (sepby1[F2JADTBody, PString] f2jADTBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
+                >>=[PList[F2JADTBody], F2JExpr] (\(ands : PList[F2JADTBody]) ->
+                    (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                        >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                            result[F2JExpr] (F2JRecADT ands expr))))
+        <|>[F2JExpr]
+        ((sepby1[F2JADTBody, PString] f2jADTBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
+            >>=[PList[F2JADTBody], F2JExpr] (\(ands : PList[F2JADTBody]) ->
+                (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                    >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                        result[F2JExpr] (F2JADT ands expr))))
 
 -- (.., ..., ...)
 -- Pair has at least two elements

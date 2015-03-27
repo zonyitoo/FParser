@@ -174,6 +174,9 @@ let f2jComment : Parser[F2JComment] =
 let f2jSpace : Parser[Unit] =
     many[Char] whitespace $>[PList[Char], Unit] ();
 
+let f2jBetween[L, R, P] (l : Parser[L]) (r : Parser[R]) (p : Parser[P]) : Parser[P] =
+    between[L, R, P] (l <*[L, Unit] f2jSpace) (f2jSpace *>[Unit, R] r) p;
+
 let f2jInfixOpName : Parser[PString] =
     many1[Char] (oneof "!#$%&*+./<=>?@\\^|-~");
 
@@ -184,11 +187,11 @@ let f2jTypeName : Parser[PString] =
 
 -- [...]
 let rec f2jTypeParams : Parser[PList[F2JType]] =
-    between[Unit, Unit, PList[F2JType]] ((char '[') >>[Char, Unit] f2jSpace) ((char ']') >>[Char, Unit] f2jSpace)
+    f2jBetween[Char, Char, PList[F2JType]] (char '[') (char ']')
         (sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
 -- (.., .., ..)
 and f2jPairedType : Parser[F2JType] =
-    between[Unit, Unit, F2JType] ((char '(') >>[Char, Unit] f2jSpace) ((char ')') >>[Char, Unit] f2jSpace)
+    f2jBetween[Char, Char, F2JType] (char '(') (char ')')
         ((sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
             >>=[PList[F2JType], F2JType] (\(types : PList[F2JType]) ->
 
@@ -200,7 +203,7 @@ and f2jPairedType : Parser[F2JType] =
             ))
 -- (..)
 and f2jSinglePairedType : Parser[F2JType] =
-    between[Unit, Unit, F2JType] ((char '(') >>[Char, Unit] f2jSpace) ((char ')') >>[Char, Unit] f2jSpace)
+    f2jBetween[Char, Char, F2JType] (char '(') (char ')')
         (f2jType >>=[F2JType, F2JType] (\(t : F2JType) ->
 
             (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
@@ -247,7 +250,7 @@ let f2jBindingParam : Parser[F2JBindingParam] =
             f2jType <$>[F2JType, F2JBindingParam] (\(t : F2JType) ->
             F2JBindingParam (pStringToString id) t));
 
-    between[Unit, Unit, F2JBindingParam] ((char '(') >>[Char, Unit] f2jSpace) ((char ')') >>[Char, Unit] f2jSpace)
+    f2jBetween[Char, Char, F2JBindingParam] (char '(') (char ')')
         binding;
 -- ( a : A ) ( b : B )
 let f2jBindingParams : Parser[PList[F2JBindingParam]] =
@@ -257,9 +260,7 @@ let f2jBindingParams : Parser[PList[F2JBindingParam]] =
 let f2jBindingName : Parser[PString] =
         ident
     <|>[PString]
-        (((char '(') >>[Char, Unit] f2jSpace)
-            >>[Unit, PString] f2jInfixOpName
-            <*[PString, Char] (f2jSpace >>[Unit, Char] (char ')')));
+        f2jBetween[Char, Char, PString] (char '(') (char ')') f2jInfixOpName;
 
 -- 12345
 let rec f2jIntLiterial : Parser[F2JExpr] =
@@ -275,8 +276,7 @@ let rec f2jIntLiterial : Parser[F2JExpr] =
 -- Just `a` or `(a)`
 let rec f2jVariable : Parser[F2JExpr] =
     let f2jVariableWithBracket : Parser[F2JExpr] =
-        between[Unit, Char, F2JExpr] ((char '(') >>[Char, Unit] f2jSpace) (f2jSpace >>[Unit, Char] (char ')'))
-            f2jVariable;
+        f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jVariable;
     (f2jBindingName <$>[PString, F2JExpr] (\(s : PString) -> F2JVariable (pStringToString s)))
         <|>[F2JExpr] f2jVariableWithBracket;
 
@@ -305,9 +305,8 @@ and f2jADT : Parser[F2JExpr] =
 -- (.., ..., ...)
 -- Pair has at least two elements
 and f2jPair : Parser[F2JExpr] =
-    (char '(' >>[Char, Unit] f2jSpace)
-        *>[Unit, PList[F2JExpr]] (sepby2[F2JExpr, Unit] f2jExpr (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
-        <*[PList[F2JExpr], Char] (f2jSpace >>[Unit, Char] (char ')'))
+    f2jBetween[Char, Char, PList[F2JExpr]] (char '(') (char ')')
+        (sepby2[F2JExpr, Unit] f2jExpr (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
         <$>[PList[F2JExpr], F2JExpr] (\(exprs : PList[F2JExpr]) -> F2JPair exprs)
 
 
@@ -323,7 +322,7 @@ and f2jLambda : Parser[F2JExpr] =
 and f2jApplication : Parser[F2JExpr] =
     let rec f2jApplicationParam : Parser[F2JApplicationParam] =
         let f2jApplicationParamWithBracket : Parser[F2JApplicationParam] =
-            between[Unit, Char, F2JApplicationParam] ((char '(') >>[Char, Unit] f2jSpace) (f2jSpace >>[Unit, Char] (char ')'))
+            f2jBetween[Char, Char, F2JApplicationParam] (char '(') (char ')')
                 f2jApplicationParam;
 
             (f2jExpr <$>[F2JExpr, F2JApplicationParam] (\(expr : F2JExpr) -> F2JApplicationParamExpr expr))
@@ -333,7 +332,7 @@ and f2jApplication : Parser[F2JExpr] =
             (f2jApplicationParamWithBracket);
 
     let f2jApplicationWithBracket : Parser[F2JExpr] =
-        between[Unit, Char, F2JExpr] ((char '(') >>[Char, Unit] f2jSpace) (f2jSpace >>[Unit, Char] (char ')'))
+        f2jBetween[Char, Char, F2JExpr] (char '(') (char ')')
             f2jApplication;
 
         ((f2jExpr <*[F2JExpr, Unit] f2jSpace) >>=[F2JExpr, F2JExpr] (\(a : F2JExpr) ->
@@ -343,7 +342,7 @@ and f2jApplication : Parser[F2JExpr] =
         f2jApplicationWithBracket
 
 and f2jBlock : Parser[F2JExpr] =
-    between[Unit, Char, F2JExpr] ((char '{') >>[Char, Unit] f2jSpace) (f2jSpace >>[Unit, Char] (char '}'))
+    f2jBetween[Char, Char, F2JExpr] (char '{') (char '}')
         ((sepby1[F2JExpr, Char] f2jExpr (f2jSpace *>[Unit, Char] (char ';') <*[Char, Unit] f2jSpace))
             <$>[PList[F2JExpr], F2JExpr] (\(e : PList[F2JExpr]) -> F2JBlock e))
 

@@ -372,6 +372,40 @@ and f2jBlock : Parser[F2JExpr] =
         ((sepby1[F2JExpr, Char] f2jExpr (f2jSpace *>[Unit, Char] (char ';') <*[Char, Unit] f2jSpace))
             <$>[PList[F2JExpr], F2JExpr] (\(e : PList[F2JExpr]) -> F2JBlock e))
 
+and f2jLet : Parser[F2JExpr] =
+    let f2jLetBindingBody : Parser[F2JBindingBody] =
+        (f2jBindingName <*[PString, Unit] f2jSpace)                     >>=[PString, F2JBindingBody]                    (\(name : PString) ->
+        (f2jTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        (((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType <$>[F2JType, Maybe[F2JType]] (\(t : F2JType) -> Just[F2JType] t))
+            <|>[Maybe[F2JType]] (result[Maybe[F2JType]] (Nothing[F2JType])))
+                                                                        >>=[Maybe[F2JType], F2JBindingBody]             (\(rettype : Maybe[F2JType]) ->
+        ((char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)  >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        result[F2JBindingBody] (F2JLetBindingBody (pStringToString name) tparams bparams rettype expr))))));
+    let f2jLetRecBindingBody : Parser[F2JBindingBody] =
+        (f2jBindingName <*[PString, Unit] f2jSpace)                         >>=[PString, F2JBindingBody]                    (\(name : PString) ->
+        (f2jTypeParams <*[PList[F2JType], Unit] f2jSpace)                   >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)        >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        ((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType)>>=[F2JType, F2JBindingBody]                    (\(rettype : F2JType) ->
+        ((char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)      >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        result[F2JBindingBody] (F2JLetRecBindingBody (pStringToString name) tparams bparams rettype expr))))));
+
+    ((string "let") >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        (
+            (((string "rec") >>[PString, Unit] f2jSpace >>[Unit, PList[F2JBindingBody]]
+                sepby1[F2JBindingBody, PString] f2jLetRecBindingBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
+                    >>=[PList[F2JBindingBody], F2JExpr] (\(bodies : PList[F2JBindingBody]) ->
+                        (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                            >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                                result[F2JExpr] (F2JLetRec bodies expr))))
+            <|>[F2JExpr]
+            ((sepby1[F2JBindingBody, PString] f2jLetBindingBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
+                    >>=[PList[F2JBindingBody], F2JExpr] (\(bodies : PList[F2JBindingBody]) ->
+                        (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                            >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                                result[F2JExpr] (F2JLet bodies expr))))
+        )
+
 and f2jExpr : Parser[F2JExpr] =
         f2jIntLiterial
     <|>[F2JExpr]
@@ -380,6 +414,8 @@ and f2jExpr : Parser[F2JExpr] =
         f2jADT
     <|>[F2JExpr]
         f2jPair
+    <|>[F2JExpr]
+        f2jLet
     <|>[F2JExpr]
         f2jVariable
     <|>[F2JExpr]

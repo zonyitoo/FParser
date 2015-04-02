@@ -129,11 +129,11 @@ and f2jApplicationParamToString (p : F2JApplicationParam) : String =
 and f2jExprToString (e : F2JExpr) : String =
     case e of
         F2JApplication expr param ->
-            "F2JApplication \{f2jExprToString expr} \{f2jApplicationParamToString param}"
+            "F2JApplication \{f2jExprToString expr}, \{f2jApplicationParamToString param}"
      |  F2JLet body expr ->
-            "F2JLet \{pListToString[F2JBindingBody] f2jBindingBodyToString body} \{f2jExprToString expr}"
+            "F2JLet \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
      |  F2JLetRec body expr ->
-            "F2JLetRec \{pListToString[F2JBindingBody] f2jBindingBodyToString body} \{f2jExprToString expr}"
+            "F2JLetRec \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
      |  F2JLambda params expr ->
             "F2JLambda \{pListToString[F2JBindingParam] f2jBindingParamToString params}, \{f2jExprToString expr}"
      |  F2JADT body expr ->
@@ -418,84 +418,7 @@ and f2jExpr : Parser[F2JExpr] =
         f2jLet
     <|>[F2JExpr]
         f2jVariable
-    <|>[F2JExpr]
-        f2jApplication
+    -- <|>[F2JExpr]
+    --     f2jApplication
     <|>[F2JExpr]
         f2jBlock;
-
-{
-
-    -- println (parseOutputToString[F2JComment]
-    --             f2jCommentToString
-    --             (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha")));
-
-    -- println (parseOutputToString[F2JComment]
-    --             f2jCommentToString
-    --             (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
-
-    -- println (parseOutputToString[F2JComment]
-    --             f2jCommentToString
-    --             (f2jComment `parsePString[F2JComment]` (pStringFromString "{- abchahaha -}")));
-
-    -- println (parseOutputToString[Unit]
-    --             unitToString
-    --             (eol `parsePString[Unit]` (pStringFromString "\nabcde")));
-
-    -- println (parseOutputToString[F2JType]
-    --             f2jTypeToString
-    --             (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
-
-    -- println (parseOutputToString[F2JType]
-    --             f2jTypeToString
-    --             (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
-
-    -- println (parseOutputToString[F2JBindingParam]
-    --             f2jBindingParamToString
-    --             (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
-
-    -- println (parseOutputToString[PList[F2JBindingParam]]
-    --             (pListToString[F2JBindingParam] f2jBindingParamToString)
-    --             (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
-
-    -- println (parseOutputToString[PString]
-    --             pStringToString
-    --             (f2jBindingName `parseString[PString]` "parseOutputToString"));
-
-    -- println (parseOutputToString[PString]
-    --             pStringToString
-    --             (f2jBindingName `parseString[PString]` "(<!>)"));
-
-    -- println (parseOutputToString[F2JType]
-    --             f2jTypeToString
-    --             (f2jType `parsePString[F2JType]` (pStringFromString "((A))")));
-
-    -- println (parseOutputToString[F2JType]
-    --             f2jTypeToString
-    --             (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")));
-
-    -- println (parseOutputToString[F2JExpr]
-    --             f2jExprToString
-    --             (f2jIntLiterial `parseString[F2JExpr]` "123"));
-
-    -- println (parseOutputToString[F2JExpr]
-    --             f2jExprToString
-    --             (f2jTypeAlias `parseString[F2JExpr]` "type Ha[A] = Fucker; 123"));
-
-    -- println (parseOutputToString[F2JExpr]
-    --             f2jExprToString
-    --             (f2jADT `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); 1"));
-
-    -- println (parseOutputToString[F2JExpr]
-    --             f2jExprToString
-    --             (f2jPair `parseString[F2JExpr]` "(1,2,3)"));
-
-    -- println (parseOutputToString[F2JExpr]
-    --             f2jExprToString
-    --             (f2jLambda `parseString[F2JExpr]` "\\(a : A) -> 1"));
-
-    println (parseOutputToString[F2JExpr]
-                f2jExprToString
-                (f2jVariable `parseString[F2JExpr]` "a"));
-
-    "\n-- END --"
-}

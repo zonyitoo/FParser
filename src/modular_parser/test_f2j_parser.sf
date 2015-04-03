@@ -90,6 +90,16 @@ let testF2JParserADT : TestFn = {
     }
 };
 
+let testF2JParserADTRecord : TestFn = {
+    name = "ADT\t`data X = { name : String, age : Int }; 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jADT `parseString[F2JExpr]` "data X = { name : String, age : Int }; 1"))
+    }
+};
+
+
 let testF2JParserPair : TestFn = {
     name = "Pair\t`(1,2,3)`",
     fn   = \(x : Unit) -> {
@@ -180,6 +190,24 @@ let testF2JParserCase : TestFn = {
     }
 };
 
+let testF2JParserBlock : TestFn = {
+    name = "Block\t`{a; b}`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jBlockOrRecord `parseString[F2JExpr]` "{a; b}"))
+    }
+};
+
+let testF2JParserRecord : TestFn = {
+    name = "Block\t`{ x = 1, y = 2 }`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jBlockOrRecord `parseString[F2JExpr]` "{ x = 1, y = 2 }"))
+    }
+};
+
 
 let testF2JParserSuite : TestSuite = {
     name = "Test F2J Parser",
@@ -193,6 +221,7 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserBindParams
             +>[TestFn] (testF2JParserTypeAlias
             +>[TestFn] (testF2JParserADT
+            +>[TestFn] (testF2JParserADTRecord
             +>[TestFn] (testF2JParserPair
             +>[TestFn] (testF2JParserLambda
             +>[TestFn] (testF2JParserLet
@@ -203,7 +232,9 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserApplication3
             +>[TestFn] (testF2JParserApplication4
             +>[TestFn] (testF2JParserCase
-            +>[TestFn] (Nil[TestFn]))))))))))))))))))))
+            +>[TestFn] (testF2JParserBlock
+            +>[TestFn] (testF2JParserRecord
+            +>[TestFn] (Nil[TestFn])))))))))))))))))))))))
 };
 
 -- {

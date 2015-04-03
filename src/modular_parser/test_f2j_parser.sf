@@ -4,7 +4,7 @@ let printFirstF2JParseResult (l : ParseOutput[F2JExpr]) =
     let result =
         case l of
             Nil             -> "Empty result!"
-         |  Cons x _        -> f2jExprToString x._1;
+         |  Cons x _        -> "Result: \{f2jExprToString x._1}\nRemains: \{parseInputToString x._2}";
 
     println result;
 
@@ -59,6 +59,15 @@ let testF2JParserFunctionType : TestFn = {
         println (parseOutputToString[F2JType]
             f2jTypeToString
             (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")))
+    }
+};
+
+let testF2JParserFunctionType2 : TestFn = {
+    name = "Function type\t`A -> B`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JType]
+            f2jTypeToString
+            (f2jType `parsePString[F2JType]` (pStringFromString "A -> B")))
     }
 };
 
@@ -135,7 +144,6 @@ let testF2JParserLet : TestFn = {
     }
 };
 
--- FIXME:
 let testF2JParserLet2 : TestFn = {
     name = "Let\t`let x = x; 1`",
     fn   = \(x : Unit) -> {
@@ -151,6 +159,15 @@ let testF2JParserLetRec : TestFn = {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
             (f2jLet `parseString[F2JExpr]` "let rec fn[A] (a : A) : A = a; fn"))
+    }
+};
+
+let testF2JParserLetRec2 : TestFn = {
+    name = "LetRec\t`let rec r[A] (a : A) : A = r[A] a; 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jLet `parseString[F2JExpr]` "let rec r[A] (a : A) : A = r[A] a; 1"))
     }
 };
 
@@ -199,6 +216,33 @@ let testF2JParserApplication4 : TestFn = {
     }
 };
 
+let testF2JParserApplication5 : TestFn = {
+    name = "Application\t`let x = x; a (b c)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "let x = x; a (b c)"))
+    }
+};
+
+let testF2JParserApplication6 : TestFn = {
+    name = "Application\t`a[A]`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "a[A]"))
+    }
+};
+
+let testF2JParserApplication7 : TestFn = {
+    name = "Application\t`a[A] b`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "a[A] b"))
+    }
+};
+
 let testF2JParserCase : TestFn = {
     name = "Case\t`case l of Nil -> 1 | Cons x xs -> 2`",
     fn   = \(x : Unit) -> {
@@ -226,12 +270,25 @@ let testF2JParserRecord : TestFn = {
     }
 };
 
--- FIXME:
 let testF2JFull : TestFn = {
-    name = "Full test",
+    name = "Full test\t`let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}`",
     fn   = \(x : Unit) -> {
         --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
-        printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}")
+        printFirstF2JParseResult
+            (f2jExpr `parseString[F2JExpr]` "let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}")
+        -- println (parseOutputToString[F2JExpr]
+        --             f2jExprToString
+        --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
+        --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+    }
+};
+
+let testF2JFull2 : TestFn = {
+    name = "Full test\t`data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1`",
+    fn   = \(x : Unit) -> {
+        --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
+        printFirstF2JParseResult
+            (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1")
         -- println (parseOutputToString[F2JExpr]
         --             f2jExprToString
         --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
@@ -248,6 +305,7 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserType
             +>[TestFn] (testF2JParserPairedType
             +>[TestFn] (testF2JParserFunctionType
+            +>[TestFn] (testF2JParserFunctionType2
             +>[TestFn] (testF2JParserBindParam
             +>[TestFn] (testF2JParserBindParams
             +>[TestFn] (testF2JParserTypeAlias
@@ -258,16 +316,21 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserLet
             +>[TestFn] (testF2JParserLet2
             +>[TestFn] (testF2JParserLetRec
+            +>[TestFn] (testF2JParserLetRec2
             +>[TestFn] (testF2JParserIntLiteral
             +>[TestFn] (testF2JParserApplication
             +>[TestFn] (testF2JParserApplication2
             +>[TestFn] (testF2JParserApplication3
             +>[TestFn] (testF2JParserApplication4
+            +>[TestFn] (testF2JParserApplication5
+            +>[TestFn] (testF2JParserApplication6
+            +>[TestFn] (testF2JParserApplication7
             +>[TestFn] (testF2JParserCase
             +>[TestFn] (testF2JParserBlock
             +>[TestFn] (testF2JParserRecord
             +>[TestFn] (testF2JFull
-            +>[TestFn] (Nil[TestFn])))))))))))))))))))))))))
+            +>[TestFn] (testF2JFull2
+            +>[TestFn] (Nil[TestFn])))))))))))))))))))))))))))))))
 };
 
 -- {

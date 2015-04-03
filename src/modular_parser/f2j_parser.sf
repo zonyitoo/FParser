@@ -335,11 +335,19 @@ let rec f2jIntLiterial : Parser[F2JExpr] =
         (\(nstr : PString) -> F2JIntLiteral (pStringToString nstr));
 
 -- Just `a` or `(a)`
-let rec f2jVariable : Parser[F2JExpr] =
-    let f2jVariableWithBracket : Parser[F2JExpr] =
-        f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jVariable;
-    (f2jBindingName <$>[PString, F2JExpr] (\(s : PString) -> F2JVariable (pStringToString s)))
-        <|>[F2JExpr] f2jVariableWithBracket;
+let f2jVariable : Parser[F2JExpr] =
+    let f2jVariableName : Parser[PString] =
+            ident
+        <|>[PString]
+            f2jInfixOpName;
+
+    let rec f2jVariable' : Parser[F2JExpr] =
+        let f2jVariableWithBracket : Parser[F2JExpr] =
+            f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jVariable';
+        (f2jVariableName <$>[PString, F2JExpr] (\(s : PString) -> F2JVariable (pStringToString s)))
+            <|>[F2JExpr] f2jVariableWithBracket;
+
+    only[F2JExpr] f2jVariable';
 
 let f2jADTBody : Parser[F2JADTBody] =
     let f2jADTAlternative : Parser[F2JADTAlternative] =
@@ -428,9 +436,13 @@ and f2jApplication : Parser[F2JExpr] =
         <|>[F2JApplicationParam]
             (f2jApplicationParamWithBracket);
 
-    ((f2jExprWithoutApplication <*[F2JExpr, Unit] f2jSpace) >>=[F2JExpr, F2JExpr] (\(a : F2JExpr) ->
-        f2jApplicationParam >>=[F2JApplicationParam, F2JExpr] (\(b : F2JApplicationParam) ->
-            result[F2JExpr] (F2JApplication a b))))
+    -- ((f2jExprWithoutApplication <*[F2JExpr, Unit] f2jSpace) >>=[F2JExpr, F2JExpr] (\(a : F2JExpr) ->
+    --     f2jApplicationParam >>=[F2JApplicationParam, F2JExpr] (\(b : F2JApplicationParam) ->
+    --         result[F2JExpr] (F2JApplication a b))))
+    f2jExprWithoutApplication >>=[F2JExpr, F2JExpr] (\(leftmost : F2JExpr) ->
+        many1[F2JApplicationParam] (f2jSpace >>[Unit, F2JApplicationParam] f2jApplicationParam)
+            >>=[PList[F2JApplicationParam], F2JExpr] (\(params : PList[F2JApplicationParam]) ->
+                result[F2JExpr] (foldl[F2JApplicationParam, F2JExpr] (\(b : F2JExpr) (a : F2JApplicationParam) -> F2JApplication b a) leftmost params)))
 
 and f2jBlockOrRecord : Parser[F2JExpr] =
     let f2jRecordItem : Parser[F2JRecordItem] =
@@ -451,21 +463,28 @@ and f2jBlockOrRecord : Parser[F2JExpr] =
         )
 
 and f2jLet : Parser[F2JExpr] =
+    let f2jLetOptionalTypeParams : Parser[PList[F2JType]] =
+        f2jTypeParams <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]));
+
+    let f2jLetOptionalBindingParams : Parser[PList[F2JBindingParam]] =
+        f2jBindingParams <|>[PList[F2JBindingParam]] (result[PList[F2JBindingParam]] (Nil[F2JBindingParam]));
+
     let f2jLetBindingBody : Parser[F2JBindingBody] =
-        (f2jBindingName <*[PString, Unit] f2jSpace)                     >>=[PString, F2JBindingBody]                    (\(name : PString) ->
-        (f2jTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
-        (f2jBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        (f2jBindingName <*[PString, Unit] f2jSpace)                                >>=[PString, F2JBindingBody]                    (\(name : PString) ->
+        (f2jLetOptionalTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jLetOptionalBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
         (((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType <$>[F2JType, Maybe[F2JType]] (\(t : F2JType) -> Just[F2JType] t))
             <|>[Maybe[F2JType]] (result[Maybe[F2JType]] (Nothing[F2JType])))
                                                                         >>=[Maybe[F2JType], F2JBindingBody]             (\(rettype : Maybe[F2JType]) ->
-        ((char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)  >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)  >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
         result[F2JBindingBody] (F2JLetBindingBody (pStringToString name) tparams bparams rettype expr))))));
+
     let f2jLetRecBindingBody : Parser[F2JBindingBody] =
-        (f2jBindingName <*[PString, Unit] f2jSpace)                         >>=[PString, F2JBindingBody]                    (\(name : PString) ->
-        (f2jTypeParams <*[PList[F2JType], Unit] f2jSpace)                   >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
-        (f2jBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)        >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        (f2jBindingName <*[PString, Unit] f2jSpace)                                >>=[PString, F2JBindingBody]                    (\(name : PString) ->
+        (f2jLetOptionalTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jLetOptionalBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
         ((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType)>>=[F2JType, F2JBindingBody]                    (\(rettype : F2JType) ->
-        ((char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)      >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)      >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
         result[F2JBindingBody] (F2JLetRecBindingBody (pStringToString name) tparams bparams rettype expr))))));
 
     (f2jKeywordLet >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
@@ -542,7 +561,9 @@ and f2jExpr : Parser[F2JExpr] =
     --     f2jBlock
     -- <|>[F2JExpr]
     --     f2jExprWithBracket;
-
-        f2jExprWithoutApplication
+        f2jApplication
     <|>[F2JExpr]
-        f2jApplication;
+        f2jExprWithoutApplication
+    -- <|>[F2JExpr]
+    --     f2jApplication
+    ;

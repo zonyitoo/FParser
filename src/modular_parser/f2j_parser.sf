@@ -55,13 +55,6 @@ let f2jBindingParamEq (a : F2JBindingParam) (b : F2JBindingParam) : Bool =
                 F2JBindingParam idb tb ->
                     (ida `stringEq` idb) && (ta `f2jTypeEq` tb);
 
-data F2JCaseAlternative = F2JCaseAlternative String PList[String];
-
-let f2jCaseAlternativeToString (c : F2JCaseAlternative) : String =
-    case c of
-        F2JCaseAlternative name args ->
-            "F2JCaseAlternative \{name} \{pListToString[String] stringToString args}";
-
 data F2JADTAlternative = F2JADTAlternative String PList[F2JType];
 
 let f2jADTAlternativeToString (a : F2JADTAlternative) : String =
@@ -83,6 +76,8 @@ data rec
 and F2JApplicationParam = F2JApplicationParamExpr F2JExpr
                         | F2JApplicationParamType PList[F2JType]
 
+and F2JCaseAlternative = F2JCaseAlternative String PList[String] F2JExpr
+
             -- Application
 and F2JExpr = F2JApplication   F2JExpr                F2JApplicationParam
             -- Let binding                            ; expr
@@ -92,7 +87,7 @@ and F2JExpr = F2JApplication   F2JExpr                F2JApplicationParam
             -- Lambda function params                 inner expr
             | F2JLambda        PList[F2JBindingParam] F2JExpr
             -- case of
-            -- | F2JCase          F2JExpr PList[(F2JCaseAlternative, F2JExpr)]
+            | F2JCase          F2JExpr PList[F2JCaseAlternative]
             -- ADT
             | F2JADT           PList[F2JADTBody] F2JExpr
             | F2JRecADT        PList[F2JADTBody] F2JExpr
@@ -112,30 +107,6 @@ and F2JExpr = F2JApplication   F2JExpr                F2JApplicationParam
             | F2JBlock         PList[F2JExpr]
             ;
 
-let f2jKeyword (k : String) : Parser[PString] =
-    string k;
-
-let f2jKeywordLet : Parser[PString] =
-    f2jKeyword "let";
-
-let f2jKeywordRec : Parser[PString] =
-    f2jKeyword "rec";
-
-let f2jKeywordAnd : Parser[PString] =
-    f2jKeyword "and";
-
-let f2jKeywordData : Parser[PString] =
-    f2jKeyword "data";
-
-let f2jKeywordType : Parser[PString] =
-    f2jKeyword "type";
-
-let f2jKeywordCase : Parser[PString] =
-    f2jKeyword "case";
-
-let f2jKeywordOf : Parser[PString] =
-    f2jKeyword "of";
-
 let rec f2jBindingBodyToString (b : F2JBindingBody) : String =
     case b of
         F2JLetBindingBody name args params rettype expr ->
@@ -150,6 +121,11 @@ and f2jApplicationParamToString (p : F2JApplicationParam) : String =
      |  F2JApplicationParamType t ->
             "F2JApplicationParamType \{pListToString[F2JType] f2jTypeToString t}"
 
+and f2jCaseAlternativeToString (c : F2JCaseAlternative) : String =
+    case c of
+        F2JCaseAlternative name args expr ->
+            "F2JCaseAlternative \{name} \{pListToString[String] stringToString args} -> \{f2jExprToString expr}"
+
 and f2jExprToString (e : F2JExpr) : String =
     case e of
         F2JApplication expr param ->
@@ -160,6 +136,8 @@ and f2jExprToString (e : F2JExpr) : String =
             "F2JLetRec \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
      |  F2JLambda params expr ->
             "F2JLambda \{pListToString[F2JBindingParam] f2jBindingParamToString params}, \{f2jExprToString expr}"
+     |  F2JCase e alts ->
+            "F2JCase \{f2jExprToString e}, \{pListToString[F2JCaseAlternative] f2jCaseAlternativeToString alts}"
      |  F2JADT body expr ->
             "F2JADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
      |  F2JRecADT body expr ->
@@ -208,6 +186,9 @@ let f2jComment : Parser[F2JComment] =
 let f2jSpace : Parser[Unit] =
     many[Char] whitespace $>[PList[Char], Unit] ();
 
+let f2jSpace1 : Parser[Unit] =
+    many1[Char] whitespace $>[PList[Char], Unit] ();
+
 let f2jBetween[L, R, P] (l : Parser[L]) (r : Parser[R]) (p : Parser[P]) : Parser[P] =
     between[L, R, P] (l <*[L, Unit] f2jSpace) (f2jSpace *>[Unit, R] r) p;
 
@@ -218,6 +199,30 @@ let f2jTypeName : Parser[PString] =
     upper                                           >>=[Char, PString]      (\(x : Char) ->
     (many[Char] (alphanum <|>[Char] (char '_')))    >>=[PString, PString]   (\(xs : PString) ->
     result[PString] (x +>[Char] xs)));
+
+let f2jKeyword (k : String) : Parser[PString] =
+    string k;
+
+let f2jKeywordLet : Parser[PString] =
+    f2jKeyword "let";
+
+let f2jKeywordRec : Parser[PString] =
+    f2jKeyword "rec";
+
+let f2jKeywordAnd : Parser[PString] =
+    f2jKeyword "and";
+
+let f2jKeywordData : Parser[PString] =
+    f2jKeyword "data";
+
+let f2jKeywordType : Parser[PString] =
+    f2jKeyword "type";
+
+let f2jKeywordCase : Parser[PString] =
+    f2jKeyword "case";
+
+let f2jKeywordOf : Parser[PString] =
+    f2jKeyword "of";
 
 -- [...]
 let rec f2jTypeParams : Parser[PList[F2JType]] =
@@ -427,6 +432,24 @@ and f2jLet : Parser[F2JExpr] =
                                 result[F2JExpr] (F2JLet bodies expr))))
         )
 
+and f2jCase : Parser[F2JExpr] =
+    let f2jCaseAlternative : Parser[F2JCaseAlternative] =
+        (f2jTypeName <*[PString, Unit] f2jSpace) >>=[PString, F2JCaseAlternative]
+            (\(name : PString) ->
+                (sepby[PString, Unit] ident f2jSpace1) >>=[PList[PString], F2JCaseAlternative]
+                    (\(vars : PList[PString]) ->
+                        (f2jSpace >>[Unit, PString] (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr) >>=[F2JExpr, F2JCaseAlternative]
+                            (\(expr : F2JExpr) ->
+                                result[F2JCaseAlternative] (F2JCaseAlternative (pStringToString name) (map[PString, String] pStringToString vars) expr))));
+
+    let body : Parser[PList[F2JCaseAlternative]] =
+        sepby1[F2JCaseAlternative, Unit] f2jCaseAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace);
+
+    (f2jKeywordCase >>[PString, Unit] f2jSpace1) >>[Unit, F2JExpr] f2jExpr <*[F2JExpr, Unit] (f2jSpace1 >>[Unit, PString] f2jKeywordOf >>[PString, Unit] f2jSpace)
+        >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+            body >>=[PList[F2JCaseAlternative], F2JExpr] (\(b : PList[F2JCaseAlternative]) ->
+                result[F2JExpr] (F2JCase expr b)))
+
 and f2jExprWithBracket : Parser[F2JExpr] =
     f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jExpr
 
@@ -444,6 +467,8 @@ and f2jExprWithoutApplication : Parser[F2JExpr] =
         f2jVariable
     <|>[F2JExpr]
         f2jBlock
+    <|>[F2JExpr]
+        f2jCase
     <|>[F2JExpr]
         f2jExprWithBracket
 

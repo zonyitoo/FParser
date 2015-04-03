@@ -171,6 +171,15 @@ let testF2JParserApplication4 : TestFn = {
     }
 };
 
+let testF2JParserCase : TestFn = {
+    name = "Case\t`case l of Nil -> 1 | Cons x xs -> 2`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jCase `parseString[F2JExpr]` "case l of Nil -> 1 | Cons x xs -> 2"))
+    }
+};
+
 
 let testF2JParserSuite : TestSuite = {
     name = "Test F2J Parser",
@@ -193,7 +202,8 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserApplication2
             +>[TestFn] (testF2JParserApplication3
             +>[TestFn] (testF2JParserApplication4
-            +>[TestFn] (Nil[TestFn])))))))))))))))))))
+            +>[TestFn] (testF2JParserCase
+            +>[TestFn] (Nil[TestFn]))))))))))))))))))))
 };
 
 -- {

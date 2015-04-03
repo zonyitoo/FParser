@@ -112,6 +112,30 @@ and F2JExpr = F2JApplication   F2JExpr                F2JApplicationParam
             | F2JBlock         PList[F2JExpr]
             ;
 
+let f2jKeyword (k : String) : Parser[PString] =
+    string k;
+
+let f2jKeywordLet : Parser[PString] =
+    f2jKeyword "let";
+
+let f2jKeywordRec : Parser[PString] =
+    f2jKeyword "rec";
+
+let f2jKeywordAnd : Parser[PString] =
+    f2jKeyword "and";
+
+let f2jKeywordData : Parser[PString] =
+    f2jKeyword "data";
+
+let f2jKeywordType : Parser[PString] =
+    f2jKeyword "type";
+
+let f2jKeywordCase : Parser[PString] =
+    f2jKeyword "case";
+
+let f2jKeywordOf : Parser[PString] =
+    f2jKeyword "of";
+
 let rec f2jBindingBodyToString (b : F2JBindingBody) : String =
     case b of
         F2JLetBindingBody name args params rettype expr ->
@@ -314,19 +338,22 @@ let rec f2jTypeAlias : Parser[F2JExpr] =
 
 -- data T = ...
 and f2jADT : Parser[F2JExpr] =
-    (string "data" >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
-        ((string "rec") >>[PString, Unit] f2jSpace >>[Unit, PList[F2JADTBody]]
-            (sepby1[F2JADTBody, PString] f2jADTBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
-                >>=[PList[F2JADTBody], F2JExpr] (\(ands : PList[F2JADTBody]) ->
-                    (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
-                        >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
-                            result[F2JExpr] (F2JRecADT ands expr))))
-        <|>[F2JExpr]
-        ((sepby1[F2JADTBody, PString] f2jADTBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
-            >>=[PList[F2JADTBody], F2JExpr] (\(ands : PList[F2JADTBody]) ->
+    let innerBody : Parser[(PList[F2JADTBody], F2JExpr)] =
+        ((sepby1[F2JADTBody, PString] f2jADTBody (f2jSpace *>[Unit, PString] f2jKeywordAnd <*[PString, Unit] f2jSpace))
+            >>=[PList[F2JADTBody], (PList[F2JADTBody], F2JExpr)] (\(ands : PList[F2JADTBody]) ->
                 (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
-                    >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
-                        result[F2JExpr] (F2JADT ands expr))))
+                    >>=[F2JExpr, (PList[F2JADTBody], F2JExpr)] (\(expr : F2JExpr) ->
+                        result[(PList[F2JADTBody], F2JExpr)] (ands, expr))));
+
+    (f2jKeywordData >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        (
+            f2jKeywordRec >>[PString, Unit] f2jSpace >>[Unit, (PList[F2JADTBody], F2JExpr)]
+                innerBody <$>[(PList[F2JADTBody], F2JExpr), F2JExpr]
+                    (\(x : (PList[F2JADTBody], F2JExpr)) -> F2JRecADT x._1 x._2)
+            <|>[F2JExpr]
+            (innerBody <$>[(PList[F2JADTBody], F2JExpr), F2JExpr]
+                (\(x : (PList[F2JADTBody], F2JExpr)) -> F2JADT x._1 x._2))
+        )
 
 -- (.., ..., ...)
 -- Pair has at least two elements
@@ -357,15 +384,9 @@ and f2jApplication : Parser[F2JExpr] =
         <|>[F2JApplicationParam]
             (f2jApplicationParamWithBracket);
 
-    let f2jApplicationWithBracket : Parser[F2JExpr] =
-        f2jBetween[Char, Char, F2JExpr] (char '(') (char ')')
-            f2jApplication;
-
-        ((f2jExpr <*[F2JExpr, Unit] f2jSpace) >>=[F2JExpr, F2JExpr] (\(a : F2JExpr) ->
-            f2jApplicationParam >>=[F2JApplicationParam, F2JExpr] (\(b : F2JApplicationParam) ->
-                result[F2JExpr] (F2JApplication a b))))
-    <|>[F2JExpr]
-        f2jApplicationWithBracket
+    ((f2jExprWithoutApplication <*[F2JExpr, Unit] f2jSpace) >>=[F2JExpr, F2JExpr] (\(a : F2JExpr) ->
+        f2jApplicationParam >>=[F2JApplicationParam, F2JExpr] (\(b : F2JApplicationParam) ->
+            result[F2JExpr] (F2JApplication a b))))
 
 and f2jBlock : Parser[F2JExpr] =
     f2jBetween[Char, Char, F2JExpr] (char '{') (char '}')
@@ -390,23 +411,26 @@ and f2jLet : Parser[F2JExpr] =
         ((char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)      >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
         result[F2JBindingBody] (F2JLetRecBindingBody (pStringToString name) tparams bparams rettype expr))))));
 
-    ((string "let") >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
+    (f2jKeywordLet >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
         (
-            (((string "rec") >>[PString, Unit] f2jSpace >>[Unit, PList[F2JBindingBody]]
-                sepby1[F2JBindingBody, PString] f2jLetRecBindingBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
+            ((f2jKeywordRec >>[PString, Unit] f2jSpace >>[Unit, PList[F2JBindingBody]]
+                sepby1[F2JBindingBody, PString] f2jLetRecBindingBody (f2jSpace *>[Unit, PString] f2jKeywordAnd <*[PString, Unit] f2jSpace))
                     >>=[PList[F2JBindingBody], F2JExpr] (\(bodies : PList[F2JBindingBody]) ->
                         (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
                             >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
                                 result[F2JExpr] (F2JLetRec bodies expr))))
             <|>[F2JExpr]
-            ((sepby1[F2JBindingBody, PString] f2jLetBindingBody (f2jSpace *>[Unit, PString] (string "and") <*[PString, Unit] f2jSpace))
+            ((sepby1[F2JBindingBody, PString] f2jLetBindingBody (f2jSpace *>[Unit, PString] f2jKeywordAnd <*[PString, Unit] f2jSpace))
                     >>=[PList[F2JBindingBody], F2JExpr] (\(bodies : PList[F2JBindingBody]) ->
                         (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
                             >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
                                 result[F2JExpr] (F2JLet bodies expr))))
         )
 
-and f2jExpr : Parser[F2JExpr] =
+and f2jExprWithBracket : Parser[F2JExpr] =
+    f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jExpr
+
+and f2jExprWithoutApplication : Parser[F2JExpr] =
         f2jIntLiterial
     <|>[F2JExpr]
         f2jTypeAlias
@@ -418,7 +442,29 @@ and f2jExpr : Parser[F2JExpr] =
         f2jLet
     <|>[F2JExpr]
         f2jVariable
-    -- <|>[F2JExpr]
-    --     f2jApplication
     <|>[F2JExpr]
-        f2jBlock;
+        f2jBlock
+    <|>[F2JExpr]
+        f2jExprWithBracket
+
+and f2jExpr : Parser[F2JExpr] =
+    --     f2jIntLiterial
+    -- <|>[F2JExpr]
+    --     f2jTypeAlias
+    -- <|>[F2JExpr]
+    --     f2jADT
+    -- <|>[F2JExpr]
+    --     f2jPair
+    -- <|>[F2JExpr]
+    --     f2jLet
+    -- <|>[F2JExpr]
+    --     f2jVariable
+    -- -- <|>[F2JExpr]
+    -- --     f2jApplication
+    -- <|>[F2JExpr]
+    --     f2jBlock
+    -- <|>[F2JExpr]
+    --     f2jExprWithBracket;
+        f2jApplication
+    <|>[F2JExpr]
+        f2jExprWithoutApplication;

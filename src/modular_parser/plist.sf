@@ -35,7 +35,7 @@ let foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
         case s of
             Nil         -> k z
          |  Cons x xs   -> inner (invoke[PList[A]] xs) (\(y : B) -> k (f x y));
-     inner l (\(x : B) -> x);
+    inner l (\(x : B) -> x);
 
 
 let join[A] (l : PList[A]) (j : A) : PList[A] =

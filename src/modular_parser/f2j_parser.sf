@@ -542,6 +542,7 @@ and f2jExpr : Parser[F2JExpr] =
     --     f2jBlock
     -- <|>[F2JExpr]
     --     f2jExprWithBracket;
-        f2jApplication
+
+        f2jExprWithoutApplication
     <|>[F2JExpr]
-        f2jExprWithoutApplication;
+        f2jApplication;

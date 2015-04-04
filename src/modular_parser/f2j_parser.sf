@@ -334,6 +334,7 @@ let rec f2jIntLiterial : Parser[F2JExpr] =
     <$>[PString, F2JExpr]
         (\(nstr : PString) -> F2JIntLiteral (pStringToString nstr));
 
+-- FIXME: This one should co-operate with f2jApplication
 -- Just `a` or `(a)`
 let f2jVariable : Parser[F2JExpr] =
     let f2jVariableName : Parser[PString] =
@@ -561,9 +562,9 @@ and f2jExpr : Parser[F2JExpr] =
     --     f2jBlock
     -- <|>[F2JExpr]
     --     f2jExprWithBracket;
-        f2jApplication
-    <|>[F2JExpr]
-        f2jExprWithoutApplication
-    -- <|>[F2JExpr]
     --     f2jApplication
+    -- <|>[F2JExpr]
+        f2jExprWithoutApplication
+    <|>[F2JExpr]
+        f2jApplication
     ;

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+for jv in `ls | grep .java`; do
+    echo "Removing $jv"
+    rm $jv
+done
+
+for cls in `ls | grep .class`; do
+    echo "Removing $cls"
+    rm $cls
+done
+
+for sfc in `ls | grep .sfc`; do
+    echo "Removing $sfc"
+    rm $sfc
+done

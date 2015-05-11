@@ -296,6 +296,19 @@ let testF2JFull2 : TestFn = {
     }
 };
 
+let testF2JFull3 : TestFn = {
+    name = "Full test\t`data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1`",
+    fn   = \(x : Unit) -> {
+        --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
+        printFirstF2JParseResult
+            (f2jProgram `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1")
+        -- println (parseOutputToString[F2JExpr]
+        --             f2jExprToString
+        --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
+        --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+    }
+};
+
 
 let testF2JParserSuite : TestSuite = {
     name = "Test F2J Parser",
@@ -330,7 +343,8 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserRecord
             +>[TestFn] (testF2JFull
             +>[TestFn] (testF2JFull2
-            +>[TestFn] (Nil[TestFn])))))))))))))))))))))))))))))))
+            +>[TestFn] (testF2JFull3
+            +>[TestFn] (Nil[TestFn]))))))))))))))))))))))))))))))))
 };
 
 -- {

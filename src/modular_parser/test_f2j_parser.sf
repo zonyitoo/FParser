@@ -243,6 +243,25 @@ let testF2JParserApplication7 : TestFn = {
     }
 };
 
+let testF2JParserApplication8 : TestFn = {
+    name = "Application\t`a[A] b`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jProgram `parseString[F2JExpr]` "a[A] b"))
+    }
+};
+
+let testF2JParserApplication9 : TestFn = {
+    name = "Application\t`what the fuck`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jProgram `parseString[F2JExpr]` "what the fuck"))
+    }
+};
+
+
 let testF2JParserCase : TestFn = {
     name = "Case\t`case l of Nil -> 1 | Cons x xs -> 2`",
     fn   = \(x : Unit) -> {
@@ -338,13 +357,15 @@ let testF2JParserSuite : TestSuite = {
             +>[TestFn] (testF2JParserApplication5
             +>[TestFn] (testF2JParserApplication6
             +>[TestFn] (testF2JParserApplication7
+            +>[TestFn] (testF2JParserApplication8
+            +>[TestFn] (testF2JParserApplication9
             +>[TestFn] (testF2JParserCase
             +>[TestFn] (testF2JParserBlock
             +>[TestFn] (testF2JParserRecord
             +>[TestFn] (testF2JFull
             +>[TestFn] (testF2JFull2
             +>[TestFn] (testF2JFull3
-            +>[TestFn] (Nil[TestFn]))))))))))))))))))))))))))))))))
+            +>[TestFn] (Nil[TestFn]))))))))))))))))))))))))))))))))))
 };
 
 -- {

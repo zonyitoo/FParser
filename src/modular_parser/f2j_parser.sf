@@ -584,7 +584,7 @@ and f2jProgram : Parser[F2JExpr] =
         case res of
             Nil             -> res
          |  Cons x xs       ->
-                if len[Char] x._2._2 == 0 then
+                if isempty[Char] x._2._2 then
                     singleton[ParseContext[F2JExpr]] x
                 else
                     discard (invoke[ParseOutput[F2JExpr]] xs);

@@ -37,20 +37,20 @@ let runTestSuites (suites : PList[TestSuite]) : Unit =
     foldl[TestSuite, Unit]
         (\(__ : Unit) (suite : TestSuite) -> runTestSuite suite) () suites;
 
-let error (msg : String) = {
-    java.lang.System.err.println(msg);
-    java.lang.System.exit(1);
-    ()
-};
+-- let error (msg : String) = {
+--     java.lang.System.err.println(msg);
+--     java.lang.System.exit(1);
+--     ()
+-- };
 
 let assert (b : Bool) =
     if b then
         ()
     else
-        error "Assert failed!";
+        error[Unit] "Assert failed!";
 
 let assertEq[A] (eq : Eq[A]) (show : Show[A]) (src : A) (expected : A) =
     if src `eq` expected then
         ()
     else
-        error "Assert failed!\n\tExpecting: \{show expected}\n\tBut Found: \{show src}";
+        error[Unit] "Assert failed!\n\tExpecting: \{show expected}\n\tBut Found: \{show src}";

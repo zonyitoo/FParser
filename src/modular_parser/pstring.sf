@@ -13,7 +13,7 @@ let pStringToString (l : PString) : String =
 
 let pStringFromString (str : String) : PString =
     let rec inner (str : String) (idx : Int) : PString =
-        if idx `intEq` length(str) then
+        if idx `intEq` str.length() then
             (Nil[Char])
         else
             (Cons[Char] str.charAt(idx) (\(__ : Unit) -> (inner str (idx+1))));

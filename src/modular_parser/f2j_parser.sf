@@ -580,14 +580,14 @@ and f2jProgram : Parser[F2JExpr] =
     -- So we will try to discard all parsing results until we find the expected
     -- one.
 
-    let discard (res : ParseOutput[F2JExpr]) : ParseOutput[F2JExpr] =
+    let rec discard (res : ParseOutput[F2JExpr]) : ParseOutput[F2JExpr] =
         case res of
             Nil             -> res
          |  Cons x xs       ->
-                if length(x._2._2) == 0 then
+                if len[Char] x._2._2 == 0 then
                     singleton[ParseContext[F2JExpr]] x
                 else
-                    discard (invoke[ParseContext[F2JExpr]] xs);
+                    discard (invoke[ParseOutput[F2JExpr]] xs);
 
-    \(inp : PString) -> discard (f2jExpr inp)
+    \(inp : ParseInput) -> discard (f2jExpr inp)
 ;

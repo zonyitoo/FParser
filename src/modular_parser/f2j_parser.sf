@@ -443,7 +443,10 @@ and f2jApplication : Parser[F2JExpr] =
     f2jExprWithoutApplication >>=[F2JExpr, F2JExpr] (\(leftmost : F2JExpr) ->
         many1[F2JApplicationParam] (f2jSpace >>[Unit, F2JApplicationParam] f2jApplicationParam)
             >>=[PList[F2JApplicationParam], F2JExpr] (\(params : PList[F2JApplicationParam]) ->
-                result[F2JExpr] (foldl[F2JApplicationParam, F2JExpr] (\(b : F2JExpr) (a : F2JApplicationParam) -> F2JApplication b a) leftmost params)))
+                if isempty[F2JApplicationParam] params then
+                    (result[F2JExpr] leftmost)
+                else
+                    (result[F2JExpr] (foldl[F2JApplicationParam, F2JExpr] (\(b : F2JExpr) (a : F2JApplicationParam) -> F2JApplication b a) leftmost params))))
 
 and f2jBlockOrRecord : Parser[F2JExpr] =
     let f2jRecordItem : Parser[F2JRecordItem] =
@@ -567,4 +570,24 @@ and f2jExpr : Parser[F2JExpr] =
         f2jExprWithoutApplication
     <|>[F2JExpr]
         f2jApplication
-    ;
+
+and f2jProgram : Parser[F2JExpr] =
+    -- WHY is this needed?
+    -- Because if the last expression of a F2J program is an application,
+    -- `f2jExpr` will first try to recognize it as an `F2JVariable`,
+    -- which is reasonable, but not useful.
+    --
+    -- So we will try to discard all parsing results until we find the expected
+    -- one.
+
+    let discard (res : ParseOutput[F2JExpr]) : ParseOutput[F2JExpr] =
+        case res of
+            Nil             -> res
+         |  Cons x xs       ->
+                if length(x._2._2) == 0 then
+                    singleton[ParseContext[F2JExpr]] x
+                else
+                    discard (invoke[ParseContext[F2JExpr]] xs);
+
+    \(inp : PString) -> discard (f2jExpr inp)
+;

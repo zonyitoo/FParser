@@ -20,23 +20,25 @@ $ make test
 
 ## Goals
 
-* `[+]` Simple parser combinators
+* [x] Simple parser combinators
 
-* `[+]` Simple arithmetic expression parser
+* [x] Simple arithmetic expression parser
 
-* `[+]` Lazy evaluated list
+* [x] Lazy evaluated list
 
-* `[+]` Simple XML parser
+* [x] Simple XML parser
 
-* `[+]` Simple test framework
+* [x] Simple test framework
 
-* `[-]` Simple F2J parser
+* [x] Parser for a subset of F2J syntax
 
-* `[-]` Seperate in modules
+* [ ] Simple F2J parser
 
-* `[-]` Simple Scheme parser
+* [ ] Seperate in modules
 
-* `[-]` Improve efficiency
+* [ ] Simple Scheme parser
+
+* [ ] Improve efficiency
 
 ## License
 

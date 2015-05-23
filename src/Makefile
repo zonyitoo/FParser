@@ -9,6 +9,7 @@ parser: parser.sf
 
 test: parser.sf
 	$(F2J) -r $< $(F2JFLAGS)
+	cd modular_parser && make test
 
 clean:
 	rm -f *.java *.class

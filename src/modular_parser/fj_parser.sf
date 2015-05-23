@@ -57,20 +57,20 @@ let fjSpace : Parser[Unit] =
 let fjSpace1 : Parser[Unit] =
     many1[Char] whitespace $>[PList[Char], Unit] ();
 
-data FJClassName = FJClassName String;
+data FJType = FJType String;
 
-let fjClassNameToString (c : FJClassName) : String =
+let fjTypeToString (c : FJType) : String =
     case c of
-        FJClassName c  -> "FJClassName \{c}";
+        FJType c  -> "FJType \{c}";
 
-let fjClassName : Parser[FJClassName] =
+let fjType : Parser[FJType] =
     let inner : Parser[PString] =
         bind[Char, PString]    letter (\(x : Char) ->
         bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
         result[PString] (x +>[Char] xs)));
 
     (only[PString] inner)
-        <$>[PString, FJClassName] (\(s : PString) -> (FJClassName (pStringToString s)));
+        <$>[PString, FJType] (\(s : PString) -> (FJType (pStringToString s)));
 
 type FJIdentifier = String;
 
@@ -86,8 +86,8 @@ data FJExpr = FJVariable FJIdentifier
             | FJFieldAccess FJExpr FJIdentifier
             | FJMethodInvoke FJExpr FJIdentifier PList[FJExpr]
             | FJSelfMethodInvoke FJIdentifier PList[FJExpr]
-            | FJAllocate FJClassName PList[FJExpr]
-            | FJTypeCast FJClassName FJExpr
+            | FJAllocate FJType PList[FJExpr]
+            | FJTypeCast FJType FJExpr
             | FJIntLiteral String
             ;
 
@@ -96,8 +96,8 @@ let rec fjExprToString (expr : FJExpr) : String =
         FJVariable x                    -> "FJVariable \{x}"
      |  FJFieldAccess e f               -> "FJFieldAccess (\{fjExprToString e}) \{f}"
      |  FJMethodInvoke e1 m e2list      -> "FJMethodInvoke (\{fjExprToString e1}) \{m} (\{pListToString[FJExpr] fjExprToString e2list})"
-     |  FJAllocate c elist              -> "FJAllocate \{fjClassNameToString c} (\{pListToString[FJExpr] fjExprToString elist})"
-     |  FJTypeCast c e                  -> "FJTypeCast \{fjClassNameToString c} (\{fjExprToString e})"
+     |  FJAllocate c elist              -> "FJAllocate \{fjTypeToString c} (\{pListToString[FJExpr] fjExprToString elist})"
+     |  FJTypeCast c e                  -> "FJTypeCast \{fjTypeToString c} (\{fjExprToString e})"
      |  FJIntLiteral i                  -> "FJIntLiteral \{i}"
      |  FJSelfMethodInvoke m e2list     -> "FJSelfMethodInvoke \{m} (\{pListToString[FJExpr] fjExprToString e2list})";
 
@@ -142,8 +142,8 @@ and fjExprSelfMethodInvoke : Parser[FJExpr] =
 
 and fjExprAllocate : Parser[FJExpr] =
     (string "new" <*[PString, Unit] fjSpace)
-        >>[PString, FJClassName] fjClassName
-            >>=[FJClassName, FJExpr] (\(klass : FJClassName) ->
+        >>[PString, FJType] fjType
+            >>=[FJType, FJExpr] (\(klass : FJType) ->
                 fjMethodInvokeParamList >>=[PList[FJExpr], FJExpr] (\(params : PList[FJExpr]) ->
                     result[FJExpr] (FJAllocate klass params)))
 
@@ -154,8 +154,8 @@ and fjMethodInvokeParamList : Parser[PList[FJExpr]] =
         (sepby[FJExpr, Char] fjExpr (spaceBetween[Char] (char ',')))
 
 and fjExprTypeCast : Parser[FJExpr] =
-    (between[Char, Char, FJClassName] ((char '(') <*[Char, Unit] fjSpace) (fjSpace *>[Unit, Char] (char ')')) fjClassName)
-        >>=[FJClassName, FJExpr] (\(klass : FJClassName) ->
+    (between[Char, Char, FJType] ((char '(') <*[Char, Unit] fjSpace) (fjSpace *>[Unit, Char] (char ')')) fjType)
+        >>=[FJType, FJExpr] (\(klass : FJType) ->
             fjSpace >>[Unit, FJExpr] fjExpr >>=[FJExpr, FJExpr] (\(e : FJExpr) ->
                 result[FJExpr] (FJTypeCast klass e)))
 
@@ -171,14 +171,14 @@ let fjAssignWith : Parser[FJExpr] =
 
     spaceBetween[Char] (char '=') >>[Char, FJExpr] fjExpr;
 
-data FJVariableDef = FJVariableDef FJClassName PList[(FJIdentifier, Maybe[FJExpr])];
+data FJVariableDef = FJVariableDef FJType PList[(FJIdentifier, Maybe[FJExpr])];
 
 let fjVariableDefToString (d : FJVariableDef) : String =
     let defsToString (d : (FJIdentifier, Maybe[FJExpr])) : String =
         "(\{d._1}, \{maybeToString[FJExpr] fjExprToString d._2})";
 
     case d of
-        FJVariableDef c defs -> "FJVariableDef \{fjClassNameToString c} \{pListToString[(FJIdentifier, Maybe[FJExpr])] defsToString defs}";
+        FJVariableDef c defs -> "FJVariableDef \{fjTypeToString c} \{pListToString[(FJIdentifier, Maybe[FJExpr])] defsToString defs}";
 
 let fjVariableDef : Parser[FJVariableDef] =
     let spaceBetween[T] (p : Parser[T]) : Parser[T] =
@@ -191,29 +191,33 @@ let fjVariableDef : Parser[FJVariableDef] =
                 <|>[(FJIdentifier, Maybe[FJExpr])]
                 (result[(FJIdentifier, Maybe[FJExpr])] ((pStringToString varname), (Nothing[FJExpr]))));
 
-    fjClassName <*[FJClassName, Unit] fjSpace1
-        >>=[FJClassName, FJVariableDef] (\(klass : FJClassName) ->
+    fjType <*[FJType, Unit] fjSpace1
+        >>=[FJType, FJVariableDef] (\(klass : FJType) ->
             ((sepby1[(FJIdentifier, Maybe[FJExpr]), Char] varBody (spaceBetween[Char] (char ',')))
                 <*[PList[(FJIdentifier, Maybe[FJExpr])], Char] (fjSpace >>[Unit, Char] (char ';')))
                     >>=[PList[(FJIdentifier, Maybe[FJExpr])], FJVariableDef]
                         (\(defs : PList[(FJIdentifier, Maybe[FJExpr])]) ->
                             result[FJVariableDef] (FJVariableDef klass defs)));
 
-data FJFieldDef = FJFieldDef FJClassName FJIdentifier Maybe[FJExpr];
+data FJFieldDef = FJFieldDef FJType FJIdentifier Maybe[FJExpr];
 
 let fjFieldDefToString (d : FJFieldDef) : String =
     case d of
-        FJFieldDef c f e -> "FJFieldDef \{fjClassNameToString c} \{f} \{maybeToString[FJExpr] fjExprToString e}";
+        FJFieldDef c f e -> "FJFieldDef \{fjTypeToString c} \{f} \{maybeToString[FJExpr] fjExprToString e}";
 
 let fjFieldDef : Parser[FJFieldDef] =
-    fjClassName <*[FJClassName, Unit] fjSpace1
-        >>=[FJClassName, FJFieldDef] (\(klass : FJClassName) ->
+    fjType <*[FJType, Unit] fjSpace1
+        >>=[FJType, FJFieldDef] (\(klass : FJType) ->
             (only[PString] fjIdentifier) >>=[PString, FJFieldDef] (\(varname : PString) ->
                 ((fjAssignWith <*[FJExpr, Char] (fjSpace >>[Unit, Char] (char ';')))
                     >>=[FJExpr, FJFieldDef] (\(e : FJExpr) -> result[FJFieldDef] (FJFieldDef klass (pStringToString varname) (Just[FJExpr] e))))
                 <|>[FJFieldDef]
                 (fjSpace >>[Unit, Char] (char ';')
                     >>[Char, FJFieldDef] (result[FJFieldDef] (FJFieldDef klass (pStringToString varname) (Nothing[FJExpr]))))));
+
+
+
+
 
 data FJStmt = FJStmtVariableDef FJVariableDef
             | FJStmtExpr FJExpr
@@ -240,8 +244,6 @@ and fjStmtBlock : Parser[PList[FJStmt]] =
         *>[Char, PList[FJStmt]] (sepby[FJStmt, Unit] fjStmt fjSpace)
         <*[PList[FJStmt], Char] (fjSpace >>[Unit, Char] (char '}'))
 ;
-
-data FJConstDef = FJConstDef String PList[FJFieldDef];
 
 {
     println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "a"));

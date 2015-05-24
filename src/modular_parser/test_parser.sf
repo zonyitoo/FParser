@@ -3,7 +3,7 @@
     INCLUDE "testfx.sf"
     INCLUDE "plist.sf"
     INCLUDE "pstring.sf"
-    INCLUDE "parser_modular.sf"
+    INCLUDE "parser.sf"
     INCLUDE "test_parser_helpers.sf"
 #-}
 

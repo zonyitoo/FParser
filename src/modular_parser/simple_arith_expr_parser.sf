@@ -1,4 +1,4 @@
-{-# INCLUDE "parser_modular.sf" #-}
+{-# INCLUDE "parser.sf" #-}
 
 -- Simple arithmetic expression
 

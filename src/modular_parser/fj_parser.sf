@@ -1,5 +1,5 @@
 {-#
-    INCLUDE "parser_modular.sf"
+    INCLUDE "parser.sf"
     INCLUDE "pstring.sf"
     INCLUDE "maybe.sf"
     INCLUDE "plist.sf"

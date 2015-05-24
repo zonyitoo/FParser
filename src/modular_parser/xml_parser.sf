@@ -1,7 +1,7 @@
 {-#
     INCLUDE "plist.sf"
     INCLUDE "pstring.sf"
-    INCLUDE "parser_modular.sf"
+    INCLUDE "parser.sf"
 #-}
 
 -- Naive XML Parser

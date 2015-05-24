@@ -2,7 +2,7 @@
 {-# INCLUDE "show.sf" #-}
 {-# INCLUDE "plist.sf" #-}
 {-# INCLUDE "maybe.sf" #-}
-{-# INCLUDE "parser_modular.sf" #-}
+{-# INCLUDE "parser.sf" #-}
 {-# INCLUDE "testfx.sf" #-}
 
 let firstParseOutputEq[A] (eq : Eq[A]) (r : ParseOutput[A]) (expected : ParseContext[A]) : Bool =

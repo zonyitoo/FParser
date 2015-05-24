@@ -6,12 +6,6 @@ A monadic parser combinators library implementation in [F2J](https://github.com/
 
 ## Usage
 
-* Build
-
-```bash
-$ make
-```
-
 * Run tests
 
 ```bash
@@ -20,21 +14,21 @@ $ make test
 
 ## Goals
 
-* [x] Simple parser combinators
+* [x] Simple parser combinators (`parser.sf`)
 
-* [x] Simple arithmetic expression parser
+* [x] Simple arithmetic expression parser (`simple_arith_expr_parser.sf`)
 
-* [x] Lazy evaluated list
+* [x] Lazy evaluated list (`plist.sf`)
 
-* [x] Simple XML parser
+* [x] Simple XML parser (`xml_parser.sf`)
 
-* [x] Simple test framework
+* [x] Simple test framework (`testfx.sf`)
 
-* [x] Parser for a subset of F2J syntax
+* [x] Parser for a subset of F2J syntax (`f2j_parser.sf`)
 
-* [ ] Simple F2J parser
+* [x] Seperate in modules
 
-* [ ] Seperate in modules
+* [x] Feather Weight Java parser (`fj_parser.sf`)
 
 * [ ] Simple Scheme parser
 

@@ -110,6 +110,8 @@ let rec fjExpr : Parser[FJExpr] =
     let bracketSur : Parser[FJExpr] =
         between[Unit, Unit, FJExpr] ((char '(') >>[Char, Unit] fjSpace) (fjSpace <*[Unit, Char] (char ')'))
             fjExpr;
+    bracketSur
+    <|>[FJExpr]
     fjExprFieldAccessOrMethodInvoke
     <|>[FJExpr]
     fjExprWithoutFieldAccessOrMethodInvoke

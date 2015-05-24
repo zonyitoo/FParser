@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ $# -le 1 ]]; then
+if [[ $# -lt 1 ]]; then
     echo "Usage: $0 file1.sf file2.sf ...";
     exit 1;
 fi
@@ -12,7 +12,7 @@ while [[ $# > 0 ]]; do
         exit 1;
     fi
 
-    COMBINED_FILE="${FILE_NAME/%.sf/}.sfc"
+    COMBINED_FILE="${FILE_NAME/%.sf/.sfc}"
 
     python include.py --output "$COMBINED_FILE" "$FILE_NAME"
 

@@ -5,6 +5,7 @@
 {-# INCLUDE "test_simple_arith_expr_parser.sf" #-}
 {-# INCLUDE "test_xml_parser.sf" #-}
 {-# INCLUDE "test_f2j_parser.sf" #-}
+{-# INCLUDE "test_fj_parser.sf" #-}
 
 let parserTestSuites : PList[TestSuite] =
     testUtilitiesSuite
@@ -12,7 +13,8 @@ let parserTestSuites : PList[TestSuite] =
         +>[TestSuite] (testSimpleArithmetricExprSuite
         +>[TestSuite] (testNaiveXMLParserSuite
         +>[TestSuite] (testF2JParserSuite
-        +>[TestSuite] (Nil[TestSuite])))));
+        +>[TestSuite] (testFJParserSuite
+        +>[TestSuite] (Nil[TestSuite]))))));
 
 {
     runTestSuites parserTestSuites;

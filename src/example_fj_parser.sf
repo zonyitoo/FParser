@@ -1,0 +1,41 @@
+{-#
+    INCLUDE "fj_parser.sf"
+    INCLUDE "testfx.sf"
+#-}
+
+{
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "a"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "a.b"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "a.b()"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "new A()"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "(A) a"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "42"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "(42)"));
+    println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "((42))"));
+
+    println (parseOutputToString[FJVariableDef] fjVariableDefToString (fjVariableDef `parseString[FJVariableDef]` "int a, b = 1;"));
+    println (parseOutputToString[FJFieldDef] fjFieldDefToString (fjFieldDef `parseString[FJFieldDef]` "int b = 1;"));
+
+    println (parseOutputToString[FJStmt] fjStmtToString (fjStmt `parseString[FJStmt]` "int b = 1;"));
+    println (parseOutputToString[FJStmt] fjStmtToString (fjStmt `parseString[FJStmt]` "b;"));
+    println (parseOutputToString[FJStmt] fjStmtToString (fjStmt `parseString[FJStmt]` "{ int a = 1; b; }"));
+    println (parseOutputToString[FJStmt] fjStmtToString (fjStmt `parseString[FJStmt]` "fuck(you, 1);"));
+
+    println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "void hello(int a) { }"));
+    println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "void hello(int a = 1) { }"));
+    println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "int hello(int a) { return a; }"));
+    println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "Hello(int a, int b) { }"));
+
+    println (parseOutputToString[FJClass] fjClassToString (fjClass `parseString[FJClass]` "class A {}"));
+    println (parseOutputToString[FJClass] fjClassToString (fjClass `parseString[FJClass]` "class A extends B {}"));
+    println (parseOutputToString[FJClass] fjClassToString (fjClass `parseString[FJClass]` "class A extends B { int a; }"));
+    println (parseOutputToString[FJClass] fjClassToString (fjClass `parseString[FJClass]` "class A extends B { int a; A() { super(); } }"));
+    println (parseOutputToString[FJClass] fjClassToString (fjClass `parseString[FJClass]` "class A extends B { int a; A() { super(); } void kill(int you) {}}"));
+
+    println (parseOutputToString[PList[FJClass]]
+             (pListToString[FJClass] fjClassToString)
+             (fjParse
+                    `parseString[PList[FJClass]]`
+                "class A extends B { int a; A() { super(); } void kill(int you) { this.a; }} class B { int b = 1; }"));
+    ()
+}

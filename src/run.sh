@@ -20,7 +20,7 @@ while [[ $# > 0 ]]; do
         exit $?;
     fi
 
-    f2j -r "$COMBINED_FILE"
+    f2j -r "$COMBINED_FILE" -m stack --inline
 
     if [[ $? != "0" ]]; then
         exit $?;

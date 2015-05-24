@@ -201,21 +201,33 @@ let fjVariableDef : Parser[FJVariableDef] =
                         (\(defs : PList[(FJIdentifier, Maybe[FJExpr])]) ->
                             result[FJVariableDef] (FJVariableDef klass defs)));
 
-data FJFieldDef = FJFieldDef FJType FJIdentifier Maybe[FJExpr];
+data FJFieldDef = FJFieldDef FJType PList[(FJIdentifier, Maybe[FJExpr])];
 
 let fjFieldDefToString (d : FJFieldDef) : String =
+    let defsToString (d : (FJIdentifier, Maybe[FJExpr])) : String =
+        "(\{d._1}, \{maybeToString[FJExpr] fjExprToString d._2})";
+
     case d of
-        FJFieldDef c f e -> "FJFieldDef \{fjTypeToString c}, \{f}, \{maybeToString[FJExpr] fjExprToString e}";
+        FJFieldDef c defs -> "FJFieldDef \{fjTypeToString c}, \{pListToString[(FJIdentifier, Maybe[FJExpr])] defsToString defs}";
 
 let fjFieldDef : Parser[FJFieldDef] =
+    let spaceBetween[T] (p : Parser[T]) : Parser[T] =
+        fjSpace *>[Unit, T] p <*[T, Unit] fjSpace;
+
+    let varBody : Parser[(FJIdentifier, Maybe[FJExpr])] =
+        (only[PString] fjIdentifier) >>=[PString, (FJIdentifier, Maybe[FJExpr])] (\(varname : PString) ->
+                (fjAssignWith >>=[FJExpr, (FJIdentifier, Maybe[FJExpr])] (\(e : FJExpr) ->
+                    result[(FJIdentifier, Maybe[FJExpr])] ((pStringToString varname), (Just[FJExpr] e))))
+                <|>[(FJIdentifier, Maybe[FJExpr])]
+                (result[(FJIdentifier, Maybe[FJExpr])] ((pStringToString varname), (Nothing[FJExpr]))));
+
     fjType <*[FJType, Unit] fjSpace1
         >>=[FJType, FJFieldDef] (\(klass : FJType) ->
-            (only[PString] fjIdentifier) >>=[PString, FJFieldDef] (\(varname : PString) ->
-                ((fjAssignWith <*[FJExpr, Char] (fjSpace >>[Unit, Char] (char ';')))
-                    >>=[FJExpr, FJFieldDef] (\(e : FJExpr) -> result[FJFieldDef] (FJFieldDef klass (pStringToString varname) (Just[FJExpr] e))))
-                <|>[FJFieldDef]
-                (fjSpace >>[Unit, Char] (char ';')
-                    >>[Char, FJFieldDef] (result[FJFieldDef] (FJFieldDef klass (pStringToString varname) (Nothing[FJExpr]))))));
+            ((sepby1[(FJIdentifier, Maybe[FJExpr]), Char] varBody (spaceBetween[Char] (char ',')))
+                <*[PList[(FJIdentifier, Maybe[FJExpr])], Char] (fjSpace >>[Unit, Char] (char ';')))
+                    >>=[PList[(FJIdentifier, Maybe[FJExpr])], FJFieldDef]
+                        (\(defs : PList[(FJIdentifier, Maybe[FJExpr])]) ->
+                            result[FJFieldDef] (FJFieldDef klass defs)));
 
 data FJStmt = FJStmtVariableDef FJVariableDef
             | FJStmtExpr FJExpr

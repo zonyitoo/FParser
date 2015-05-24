@@ -23,4 +23,5 @@ while [[ $# > 0 ]]; do
 
     rm "$COMBINED_FILE"
 
+    shift
 done

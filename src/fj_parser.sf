@@ -88,6 +88,7 @@ data FJExpr = FJVariable FJIdentifier
             | FJAllocate FJType PList[FJExpr]
             | FJTypeCast FJType FJExpr
             | FJIntLiteral String
+            | FJBracketSurroundedExpr FJExpr
             ;
 
 let rec fjExprToString (expr : FJExpr) : String =
@@ -98,7 +99,8 @@ let rec fjExprToString (expr : FJExpr) : String =
      |  FJAllocate c elist              -> "FJAllocate \{fjTypeToString c}, (\{pListToString[FJExpr] fjExprToString elist})"
      |  FJTypeCast c e                  -> "FJTypeCast \{fjTypeToString c}, (\{fjExprToString e})"
      |  FJIntLiteral i                  -> "FJIntLiteral \{i}"
-     |  FJSelfMethodInvoke m e2list     -> "FJSelfMethodInvoke \{m}, (\{pListToString[FJExpr] fjExprToString e2list})";
+     |  FJSelfMethodInvoke m e2list     -> "FJSelfMethodInvoke \{m}, (\{pListToString[FJExpr] fjExprToString e2list})"
+     |  FJBracketSurroundedExpr e       -> "FJBracketSurroundedExpr \{fjExprToString e}";
 
 -- x
 let fjExprVariable : Parser[FJExpr] =
@@ -108,7 +110,7 @@ let fjExprVariable : Parser[FJExpr] =
 let rec fjExpr : Parser[FJExpr] =
     let bracketSur : Parser[FJExpr] =
         between[Unit, Unit, FJExpr] ((char '(') >>[Char, Unit] fjSpace) (fjSpace <*[Unit, Char] (char ')'))
-            fjExpr;
+            (fjExpr <$>[FJExpr, FJExpr] (\(e : FJExpr) -> FJBracketSurroundedExpr e));
     bracketSur
     <|>[FJExpr]
     fjExprFieldAccessOrMethodInvoke

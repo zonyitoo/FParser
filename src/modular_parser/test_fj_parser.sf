@@ -1,0 +1,10 @@
+{-#
+    INCLUDE "fj_parser.sf"
+    INCLUDE "testfx.sf"
+#-}
+
+let testFJParserSuite : TestSuite = {
+    name = "Test Feather Weight Java parser",
+    fns  = (Nil[TestFn])
+};
+

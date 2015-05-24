@@ -1,16 +1,9 @@
-
 include Makefile.inc
 
-.PHONY: all
-all: parser
+test: test_all.sf
+	python include.py $< -o $<c
+	${F2J} -r $<c ${F2JFLAGS}
 
-parser: parser.sf
-	$(F2J) -c $< $(F2JFLAGS)
-
-test: parser.sf
-	$(F2J) -r $< $(F2JFLAGS)
-	cd modular_parser && make test
-
+.PHONY: clean
 clean:
-	rm -f *.java *.class
-
+	sh clean

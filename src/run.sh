@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [[ $# -le 1 ]]; then
+    echo "Usage: $0 file1.sf file2.sf ...";
+    exit 1;
+fi
+
 while [[ $# > 0 ]]; do
     FILE_NAME="$1"
     if ! [[ ${FILE_NAME} =~ ".sf" ]]; then

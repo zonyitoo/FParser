@@ -345,7 +345,7 @@ and fjClass : Parser[FJClass] =
                         result[FJClass] (FJClass name ext body))));
 
 let fjParse : Parser[PList[FJClass]] =
-    sepby[FJClass, Unit] fjClass fjSpace;
+    fjSpace >>[Unit, PList[FJClass]] sepby[FJClass, Unit] fjClass fjSpace;
 
 {
     println (parseOutputToString[FJExpr] fjExprToString (fjExpr `parseString[FJExpr]` "a"));

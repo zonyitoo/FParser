@@ -364,6 +364,7 @@ let fjParse : Parser[PList[FJClass]] =
     println (parseOutputToString[FJStmt] fjStmtToString (fjStmt `parseString[FJStmt]` "fuck(you, 1);"));
 
     println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "void hello(int a) { }"));
+    println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "void hello(int a = 1) { }"));
     println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "int hello(int a) { return a; }"));
     println (parseOutputToString[FJMethod] fjMethodToString (fjMethod `parseString[FJMethod]` "Hello(int a, int b) { }"));
 

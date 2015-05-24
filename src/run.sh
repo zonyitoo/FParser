@@ -17,13 +17,13 @@ while [[ $# > 0 ]]; do
     python include.py --output "$COMBINED_FILE" "$FILE_NAME"
 
     if [[ $? != "0" ]]; then
-        exit 1;
+        exit $?;
     fi
 
     f2j -r "$COMBINED_FILE"
 
     if [[ $? != "0" ]]; then
-        exit 1;
+        exit $?;
     fi
 
     rm "$COMBINED_FILE"

@@ -13,7 +13,8 @@ let testF2JParserComment : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JComment]
             f2jCommentToString
-            (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha")))
+            (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha")));
+        True
     }
 };
 
@@ -22,7 +23,8 @@ let testF2JParserCommentMultipleLines : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JComment]
             f2jCommentToString
-            (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha\n-- second line\nnormal")))
+            (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
+        True
     }
 };
 
@@ -31,7 +33,8 @@ let testF2JParserBlockComment : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JComment]
                     f2jCommentToString
-                    (f2jComment `parsePString[F2JComment]` (pStringFromString "{- abchahaha -}")))
+                    (f2jComment `parsePString[F2JComment]` (pStringFromString "{- abchahaha -}")));
+        True
     }
 };
 
@@ -40,7 +43,8 @@ let testF2JParserType : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JType]
             f2jTypeToString
-            (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")))
+            (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
+        True
     }
 };
 
@@ -49,7 +53,8 @@ let testF2JParserPairedType : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JType]
             f2jTypeToString
-            (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")))
+            (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
+        True
     }
 };
 
@@ -58,7 +63,8 @@ let testF2JParserFunctionType : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JType]
             f2jTypeToString
-            (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")))
+            (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")));
+        True
     }
 };
 
@@ -67,7 +73,8 @@ let testF2JParserFunctionType2 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JType]
             f2jTypeToString
-            (f2jType `parsePString[F2JType]` (pStringFromString "A -> B")))
+            (f2jType `parsePString[F2JType]` (pStringFromString "A -> B")));
+        True
     }
 };
 
@@ -76,7 +83,8 @@ let testF2JParserBindParam : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JBindingParam]
             f2jBindingParamToString
-            (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")))
+            (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
+        True
     }
 };
 
@@ -85,7 +93,8 @@ let testF2JParserBindParams : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[PList[F2JBindingParam]]
             (pListToString[F2JBindingParam] f2jBindingParamToString)
-            (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")))
+            (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
+        True
     }
 };
 
@@ -94,7 +103,8 @@ let testF2JParserTypeAlias : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jTypeAlias `parseString[F2JExpr]` "type Ha[A] = Fucker; 123"))
+            (f2jTypeAlias `parseString[F2JExpr]` "type Ha[A] = Fucker; 123"));
+        True
     }
 };
 
@@ -103,7 +113,8 @@ let testF2JParserADT : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jADT `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]) and X = X; 1"))
+            (f2jADT `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]) and X = X; 1"));
+        True
     }
 };
 
@@ -112,7 +123,8 @@ let testF2JParserADTRecord : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jADT `parseString[F2JExpr]` "data X = { name : String, age : Int }; 1"))
+            (f2jADT `parseString[F2JExpr]` "data X = { name : String, age : Int }; 1"));
+        True
     }
 };
 
@@ -122,7 +134,8 @@ let testF2JParserPair : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jPair `parseString[F2JExpr]` "(1,2,3)"))
+            (f2jPair `parseString[F2JExpr]` "(1,2,3)"));
+        True
     }
 };
 
@@ -131,7 +144,8 @@ let testF2JParserLambda : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jLambda `parseString[F2JExpr]` "\\(a : A) -> 1"))
+            (f2jLambda `parseString[F2JExpr]` "\\(a : A) -> 1"));
+        True
     }
 };
 
@@ -140,7 +154,8 @@ let testF2JParserLet : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jLet `parseString[F2JExpr]` "let fn[A] (a : A) : A = a; fn"))
+            (f2jLet `parseString[F2JExpr]` "let fn[A] (a : A) : A = a; fn"));
+        True
     }
 };
 
@@ -149,7 +164,8 @@ let testF2JParserLet2 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jLet `parseString[F2JExpr]` "let x = x; 1"))
+            (f2jLet `parseString[F2JExpr]` "let x = x; 1"));
+        True
     }
 };
 
@@ -158,7 +174,8 @@ let testF2JParserLetRec : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jLet `parseString[F2JExpr]` "let rec fn[A] (a : A) : A = a; fn"))
+            (f2jLet `parseString[F2JExpr]` "let rec fn[A] (a : A) : A = a; fn"));
+        True
     }
 };
 
@@ -167,7 +184,8 @@ let testF2JParserLetRec2 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jLet `parseString[F2JExpr]` "let rec r[A] (a : A) : A = r[A] a; 1"))
+                    (f2jLet `parseString[F2JExpr]` "let rec r[A] (a : A) : A = r[A] a; 1"));
+        True
     }
 };
 
@@ -176,7 +194,8 @@ let testF2JParserIntLiteral : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
             f2jExprToString
-            (f2jIntLiterial `parseString[F2JExpr]` "123"))
+            (f2jIntLiterial `parseString[F2JExpr]` "123"));
+        True
     }
 };
 
@@ -185,7 +204,8 @@ let testF2JParserApplication : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jApplication `parseString[F2JExpr]` "a b"))
+                    (f2jApplication `parseString[F2JExpr]` "a b"));
+        True
     }
 };
 
@@ -194,7 +214,8 @@ let testF2JParserApplication2 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jExpr `parseString[F2JExpr]` "(a b)"))
+                    (f2jExpr `parseString[F2JExpr]` "(a b)"));
+        True
     }
 };
 
@@ -203,7 +224,8 @@ let testF2JParserApplication3 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jExpr `parseString[F2JExpr]` "a b c"))
+                    (f2jExpr `parseString[F2JExpr]` "a b c"));
+        True
     }
 };
 
@@ -212,7 +234,8 @@ let testF2JParserApplication4 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jExpr `parseString[F2JExpr]` "a (b c)"))
+                    (f2jExpr `parseString[F2JExpr]` "a (b c)"));
+        True
     }
 };
 
@@ -221,7 +244,8 @@ let testF2JParserApplication5 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jExpr `parseString[F2JExpr]` "let x = x; a (b c)"))
+                    (f2jExpr `parseString[F2JExpr]` "let x = x; a (b c)"));
+        True
     }
 };
 
@@ -230,7 +254,8 @@ let testF2JParserApplication6 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jExpr `parseString[F2JExpr]` "a[A]"))
+                    (f2jExpr `parseString[F2JExpr]` "a[A]"));
+        True
     }
 };
 
@@ -239,7 +264,8 @@ let testF2JParserApplication7 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jExpr `parseString[F2JExpr]` "a[A] b"))
+                    (f2jExpr `parseString[F2JExpr]` "a[A] b"));
+        True
     }
 };
 
@@ -248,7 +274,8 @@ let testF2JParserApplication8 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jProgram `parseString[F2JExpr]` "a[A] b"))
+                    (f2jProgram `parseString[F2JExpr]` "a[A] b"));
+        True
     }
 };
 
@@ -257,7 +284,8 @@ let testF2JParserApplication9 : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jProgram `parseString[F2JExpr]` "what the fuck"))
+                    (f2jProgram `parseString[F2JExpr]` "what the fuck"));
+        True
     }
 };
 
@@ -267,7 +295,8 @@ let testF2JParserCase : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jCase `parseString[F2JExpr]` "case l of Nil -> 1 | Cons x xs -> 2"))
+                    (f2jCase `parseString[F2JExpr]` "case l of Nil -> 1 | Cons x xs -> 2"));
+        True
     }
 };
 
@@ -276,7 +305,8 @@ let testF2JParserBlock : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jBlockOrRecord `parseString[F2JExpr]` "{a; b}"))
+                    (f2jBlockOrRecord `parseString[F2JExpr]` "{a; b}"));
+        True
     }
 };
 
@@ -285,7 +315,8 @@ let testF2JParserRecord : TestFn = {
     fn   = \(x : Unit) -> {
         println (parseOutputToString[F2JExpr]
                     f2jExprToString
-                    (f2jBlockOrRecord `parseString[F2JExpr]` "{ x = 1, y = 2 }"))
+                    (f2jBlockOrRecord `parseString[F2JExpr]` "{ x = 1, y = 2 }"));
+        True
     }
 };
 
@@ -294,11 +325,12 @@ let testF2JFull : TestFn = {
     fn   = \(x : Unit) -> {
         --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
         printFirstF2JParseResult
-            (f2jExpr `parseString[F2JExpr]` "let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}")
+            (f2jExpr `parseString[F2JExpr]` "let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}");
         -- println (parseOutputToString[F2JExpr]
         --             f2jExprToString
         --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
         --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+        True
     }
 };
 
@@ -307,11 +339,12 @@ let testF2JFull2 : TestFn = {
     fn   = \(x : Unit) -> {
         --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
         printFirstF2JParseResult
-            (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1")
+            (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1");
         -- println (parseOutputToString[F2JExpr]
         --             f2jExprToString
         --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
         --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+        True
     }
 };
 
@@ -320,11 +353,12 @@ let testF2JFull3 : TestFn = {
     fn   = \(x : Unit) -> {
         --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
         printFirstF2JParseResult
-            (f2jProgram `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1")
+            (f2jProgram `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1");
         -- println (parseOutputToString[F2JExpr]
         --             f2jExprToString
         --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
         --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+        True
     }
 };
 

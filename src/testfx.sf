@@ -5,10 +5,12 @@
 
 let println (s : String) : Unit = { java.lang.System.out.println(s); () };
 let print (s : String) : Unit = { java.lang.System.out.print(s); () };
+let printErrLn (s : String) : Unit = { java.lang.System.err.println(s); () };
+let printErr (s : String) : Unit = { java.lang.System.err.print(s); () };
 
 type TestFn = {
     name : String,
-    fn   : Unit -> Unit
+    fn   : Unit -> Bool
 };
 
 type TestSuite = {
@@ -19,8 +21,10 @@ type TestSuite = {
 let runTest (test : TestFn) : Unit = {
     let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m\t";
     println testingPrefix.concat(test.name).concat(" :");
-    test.fn ();
-    println "\t...\u001b[33;1mpassed\u001b[0m"
+    if test.fn () then
+        println "\t...\u001b[33;1mpassed\u001b[0m"
+    else
+        println "\t...\u001b[34;1mfailed\u001b[0m"
 };
 
 let runTests (tests : PList[TestFn]) : Unit =

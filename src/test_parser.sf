@@ -11,42 +11,50 @@
 
 let testChar : TestFn = {
     name = "char 'a' (pStringFromString \"abcd\")",
-    fn   = \(__ : Unit) ->
+    fn   = \(__ : Unit) -> {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
             (char 'a' `parsePString[Char]` (pStringFromString "abcd"))
-            (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (pStringFromString "bcd"))))
+            (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (pStringFromString "bcd"))));
+        True
+    }
 };
 
 let testUpper : TestFn = {
     name = "upper (pStringFromString \"ABC\")",
-    fn   = \(__ : Unit) ->
+    fn   = \(__ : Unit) -> {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
             (upper `parsePString[Char]` (pStringFromString "ABC"))
-            (singleton[ParseContext[Char]] ('A', ((SourcePos "<default>" 1 2), (pStringFromString "BC"))))
+            (singleton[ParseContext[Char]] ('A', ((SourcePos "<default>" 1 2), (pStringFromString "BC"))));
+        True
+    }
 };
 
 let testLetter : TestFn = {
     name = "letter (pStringFromString \"abcd\")",
-    fn   = \(__ : Unit) ->
+    fn   = \(__ : Unit) -> {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
             (letter `parsePString[Char]` (pStringFromString "abcd"))
-            (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (pStringFromString "bcd"))))
+            (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (pStringFromString "bcd"))));
+        True
+    }
 };
 
 let testString : TestFn = {
     name = "string (pStringFromString \"abc\") (pStringFromString \"abcd\")",
-    fn   = \(__ : Unit) ->
+    fn   = \(__ : Unit) -> {
         assertEq[ParseOutput[PString]]
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
             ((string "abc") `parsePString[PString]` (pStringFromString "abcd"))
-            (singleton[ParseContext[PString]] ((pStringFromString "abc"), ((SourcePos "<default>" 1 4), (pStringFromString "d"))))
+            (singleton[ParseContext[PString]] ((pStringFromString "abc"), ((SourcePos "<default>" 1 4), (pStringFromString "d"))));
+        True
+    }
 };
 
 let testMany : TestFn = {
@@ -61,7 +69,8 @@ let testMany : TestFn = {
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
             (many[Char] (char 'a') `parsePString[PString]` (pStringFromString "aaab"))
-            expected
+            expected;
+        True
     }
 };
 
@@ -76,18 +85,21 @@ let testMany1 : TestFn = {
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
             (many1[Char] (char 'a') `parsePString[PString]` (pStringFromString "aaab"))
-            expected
+            expected;
+        True
     }
 };
 
 let testChoice : TestFn = {
     name = "choice (char 'a') (char 'b') (pStringFromString \"aaab\")",
-    fn   = \(__ : Unit) ->
+    fn   = \(__ : Unit) -> {
         assertEq[ParseOutput[Char]]
             (parseOutputEq[Char] charEq)
             (parseOutputToString[Char] charToString)
             (choice[Char] (char 'a') (char 'b') `parsePString[Char]` (pStringFromString "aaab"))
-            (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), pStringFromString "aab")))
+            (singleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), pStringFromString "aab")));
+        True
+    }
 };
 
 let testChoice2 : TestFn = {
@@ -102,7 +114,8 @@ let testChoice2 : TestFn = {
             (parseOutputToString[PString] pStringToString)
             (choice[PString] (string "aa") (string "aaa")
                 `parsePString[PString]` (pStringFromString "aaab"))
-            expected
+            expected;
+        True
     }
 };
 
@@ -120,7 +133,8 @@ let testWord : TestFn = {
             (parseOutputEq[PString] pStringEq)
             (parseOutputToString[PString] pStringToString)
             (word `parsePString[PString]` (pStringFromString "aaabcd abcd"))
-            expected
+            expected;
+        True
     }
 };
 
@@ -138,7 +152,8 @@ let testNatural : TestFn = {
             (parseOutputEq[Int] intEq)
             (parseOutputToString[Int] intToString)
             (natural `parsePString[Int]` (pStringFromString "12345"))
-            expected
+            expected;
+        True
     }
 };
 

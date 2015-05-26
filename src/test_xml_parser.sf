@@ -59,8 +59,10 @@ let testXMLText : TestFn = {
 
 let testXMLTextEmpty : TestFn = {
     name = "xmlText (pStringFromString \"\")",
-    fn   = \(__ : Unit) ->
-        assert (isempty[ParseContext[XMLNode]] (xmlText `parsePString[XMLNode]` (pStringFromString "")))
+    fn   = \(__ : Unit) -> {
+        assert (isempty[ParseContext[XMLNode]] (xmlText `parsePString[XMLNode]` (pStringFromString "")));
+        True
+    }
 };
 
 let testXMLAttr : TestFn = {

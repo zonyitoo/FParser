@@ -27,9 +27,16 @@ let testFJFieldAccess : TestFn = {
     }
 };
 
+let testFJMethodInvoke : TestFn = {
+    name = "Test Method Invoke",
+    fn   = \(__ : Unit) ->
+        False
+};
+
 let testFJParserSuite : TestSuite = {
     name = "Test Feather Weight Java parser",
     fns  = testFJExprVariable
                 +>[TestFn] (testFJFieldAccess
-                +>[TestFn] (Nil[TestFn]))
+                +>[TestFn] (testFJMethodInvoke
+                +>[TestFn] (Nil[TestFn])))
 };

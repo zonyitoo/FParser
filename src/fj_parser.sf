@@ -163,11 +163,12 @@ let rec fjExpr : Parser[FJExpr] =
     let bracketSur : Parser[FJExpr] =
         between[Unit, Unit, FJExpr] ((char '(') >>[Char, Unit] fjSpace) (fjSpace <*[Unit, Char] (char ')'))
             (fjExpr <$>[FJExpr, FJExpr] (\(e : FJExpr) -> FJBracketSurroundedExpr e));
-    bracketSur
-    <|>[FJExpr]
+
     fjExprFieldAccessOrMethodInvoke
     <|>[FJExpr]
     fjExprWithoutFieldAccessOrMethodInvoke
+    <|>[FJExpr]
+    bracketSur
 
 and fjExprWithoutFieldAccessOrMethodInvoke : Parser[FJExpr] =
     fjExprSelfMethodInvoke
@@ -235,6 +236,16 @@ let fjVariableDefToString (d : FJVariableDef) : String =
     case d of
         FJVariableDef c defs -> "FJVariableDef \{fjTypeToString c}, \{pListToString[(FJIdentifier, Maybe[FJExpr])] defsToString defs}";
 
+let fjVariableDefEq (a : FJVariableDef) (b : FJVariableDef) : Bool =
+    let varEq (a : (FJIdentifier, Maybe[FJExpr])) (b : (FJIdentifier, Maybe[FJExpr])) : Bool =
+        (fjIdentifierEq a._1 b._1) && (maybeEq[FJExpr] fjExprEq a._2 b._2);
+
+    case a of
+        FJVariableDef t1 def1 ->
+            case b of
+                FJVariableDef t2 def2 ->
+                    (fjTypeEq t1 t2) && (pListEq[(FJIdentifier, Maybe[FJExpr])] varEq def1 def2);
+
 let fjVariableDef : Parser[FJVariableDef] =
     let spaceBetween[T] (p : Parser[T]) : Parser[T] =
         fjSpace *>[Unit, T] p <*[T, Unit] fjSpace;
@@ -262,6 +273,16 @@ let fjFieldDefToString (d : FJFieldDef) : String =
 
     case d of
         FJFieldDef c defs -> "FJFieldDef \{fjTypeToString c}, \{pListToString[(FJIdentifier, Maybe[FJExpr])] defsToString defs}";
+
+let fjFieldDefEq (a : FJFieldDef) (b : FJFieldDef) : Bool =
+    let varEq (a : (FJIdentifier, Maybe[FJExpr])) (b : (FJIdentifier, Maybe[FJExpr])) : Bool =
+        (fjIdentifierEq a._1 b._1) && (maybeEq[FJExpr] fjExprEq a._2 b._2);
+
+    case a of
+        FJFieldDef t1 def1 ->
+            case b of
+                FJFieldDef t2 def2 ->
+                    (fjTypeEq t1 t2) && (pListEq[(FJIdentifier, Maybe[FJExpr])] varEq def1 def2);
 
 let fjFieldDef : Parser[FJFieldDef] =
     let spaceBetween[T] (p : Parser[T]) : Parser[T] =
@@ -295,6 +316,29 @@ let rec fjStmtToString (stmt : FJStmt) : String =
      |  FJStmtBlock sts             -> "FJStmtBlock \{pListToString[FJStmt] fjStmtToString sts}"
      |  FJStmtReturn ret            -> "FJStmtReturn \{fjExprToString ret}";
 
+let rec fjStmtEq (a : FJStmt) (b : FJStmt) : Bool =
+    case a of
+        FJStmtVariableDef v1 -> {
+            case b of
+                FJStmtVariableDef v2 -> fjVariableDefEq v1 v2
+             |  _                    -> False
+        }
+     |  FJStmtExpr e1 -> {
+            case b of
+                FJStmtExpr e2 -> fjExprEq e1 e2
+             |  _             -> False
+        }
+     |  FJStmtBlock b1 -> {
+            case b of
+                FJStmtBlock b2 -> pListEq[FJStmt] fjStmtEq b1 b2
+             |  _              -> False
+        }
+     |  FJStmtReturn e1 -> {
+            case b of
+                FJStmtReturn e2 -> fjExprEq e1 e2
+             |  _               -> False
+        };
+
 let fjStmtReturn : Parser[FJStmt] =
     ((string "return") >>[PString, Unit] fjSpace1 >>[Unit, FJExpr] fjExpr <*[FJExpr, Char] (fjSpace >>[Unit, Char] (char ';')))
         <$>[FJExpr, FJStmt] (\(e : FJExpr) -> FJStmtReturn e);
@@ -320,6 +364,13 @@ data FJMethodParamDef = FJMethodParamDef FJType FJIdentifier Maybe[FJExpr];
 let fjMethodParamDefToString (d : FJMethodParamDef) : String =
     case d of
         FJMethodParamDef c f e -> "FJMethodParamDef \{fjTypeToString c}, \{f}, \{maybeToString[FJExpr] fjExprToString e}";
+
+let fjMethodParamDefEq (a : FJMethodParamDef) (b : FJMethodParamDef) : Bool =
+    case a of
+        FJMethodParamDef t1 id1 e1 ->
+            case b of
+                FJMethodParamDef t2 id2 e2 ->
+                    (fjTypeEq t1 t2) && (fjIdentifierEq id1 id2) && (maybeEq[FJExpr] fjExprEq e1 e2);
 
 let fjMethodParamDef : Parser[FJMethodParamDef] =
     fjType <*[FJType, Unit] fjSpace1
@@ -348,6 +399,24 @@ let fjMethodToString (cm : FJMethod) : String =
         FJConstructor name params body -> "FJConstructor \{name}, \{pListToString[FJMethodParamDef] fjMethodParamDefToString params}, \{pListToString[FJStmt] fjStmtToString body}"
      |  FJNormalMethod name params rtype body -> "FJNormalMethod \{name}, \{pListToString[FJMethodParamDef] fjMethodParamDefToString params}, \{fjTypeToString rtype}, \{pListToString[FJStmt] fjStmtToString body}"
      ;
+let fjMethodEq (a : FJMethod) (b : FJMethod) : Bool =
+    case a of
+        FJConstructor n1 p1 s1 -> {
+            case b of
+                FJConstructor n2 p2 s2 -> (n1 == n2)
+                    && (pListEq[FJMethodParamDef] fjMethodParamDefEq p1 p2)
+                    && (pListEq[FJStmt] fjStmtEq s1 s2)
+             |  _ -> False
+        }
+     |  FJNormalMethod n1 p1 t1 s1 -> {
+            case b of
+                FJNormalMethod n2 p2 t2 s2 ->
+                    (n1 == n2)
+                        && (pListEq[FJMethodParamDef] fjMethodParamDefEq p1 p2)
+                        && (fjTypeEq t1 t2)
+                        && (pListEq[FJStmt] fjStmtEq s1 s2)
+             |  _ -> False
+        };
 
 type FJMethodWithoutRtype = (String, PList[FJMethodParamDef], PList[FJStmt]);
 let fjMethodWithoutRtype : Parser[FJMethodWithoutRtype] =
@@ -383,6 +452,32 @@ let rec fjClassBodyContentToString (c : FJClassBodyContent) : String =
 and fjClassToString (c : FJClass) : String =
     case c of
         FJClass name ext body -> "FJClass \{fjTypeToString name}, \{maybeToString[FJType] fjTypeToString ext}, \{pListToString[FJClassBodyContent] fjClassBodyContentToString body}";
+
+let rec fjClassBodyContentEq (a : FJClassBodyContent) (b : FJClassBodyContent) : Bool =
+    case a of
+        FJClassMethod m1 -> {
+            case b of
+                FJClassMethod m2 -> fjMethodEq m1 m2
+             |  _                -> False
+        }
+     |  FJClassField f1 -> {
+            case b of
+                FJClassField f2 -> fjFieldDefEq f1 f2
+             |  _               -> False
+        }
+     |  FJInnerClass c1 -> {
+            case b of
+                FJInnerClass c2 -> fjClassEq c1 c2
+             |  _               -> False
+        }
+and fjClassEq (a : FJClass) (b : FJClass) : Bool =
+    case a of
+        FJClass t1 ext1 b1 ->
+            case b of
+                FJClass t2 ext2 b2 ->
+                    (fjTypeEq t1 t2)
+                        && (maybeEq[FJType] fjTypeEq ext1 ext2)
+                        && (pListEq[FJClassBodyContent] fjClassBodyContentEq b1 b2);
 
 let rec fjClassBodyContents : Parser[PList[FJClassBodyContent]] =
     let inner : Parser[FJClassBodyContent] =

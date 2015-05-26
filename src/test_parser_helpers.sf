@@ -42,7 +42,7 @@ let assertFirstParseResultEq[A] (eq : Eq[A]) (show : Show[A]) (src : ParseOutput
 };
 
 let assertParseStringResult[A] (eq : Eq[A]) (show : Show[A]) (expected : A) (p : Parser[A]) (s : String) = {
-    println "=== Parsing \{s}";
+    println "=== Parsing \"\{s}\"";
 
     let output = p `parseString[A]` s;
     assertFirstParseResultEq[A] eq show output expected

@@ -7,11 +7,12 @@
 let testFJExprVariable : TestFn = {
     name = "Test Varialbe a",
     fn   = \(__ : Unit) -> {
-        assertFirstParseResultEq[FJExpr]
+        assertParseStringResult[FJExpr]
             fjExprEq
             fjExprToString
-            (fjExpr `parseString[FJExpr]` "a")
             (FJVariable "a")
+            fjExpr
+            "a"
     }
 };
 

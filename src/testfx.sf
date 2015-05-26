@@ -24,7 +24,7 @@ let runTest (test : TestFn) : Unit = {
     if test.fn () then
         println "\t...\u001b[33;1mpassed\u001b[0m"
     else
-        println "\t...\u001b[34;1mfailed\u001b[0m"
+        println "\t...\u001b[35;1mfailed\u001b[0m"
 };
 
 let runTests (tests : PList[TestFn]) : Unit =

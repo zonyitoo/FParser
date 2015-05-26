@@ -62,6 +62,12 @@ let fjTypeToString (c : FJType) : String =
     case c of
         FJType c  -> "FJType \{c}";
 
+let fjTypeEq (a : FJType) (b : FJType) : Bool =
+    case a of
+        FJType s1 ->
+            case b of
+                FJType s2 -> stringEq s1 s2;
+
 let fjType : Parser[FJType] =
     let inner : Parser[PString] =
         bind[Char, PString]    letter (\(x : Char) ->
@@ -72,6 +78,9 @@ let fjType : Parser[FJType] =
         <$>[PString, FJType] (\(s : PString) -> (FJType (pStringToString s)));
 
 type FJIdentifier = String;
+
+let fjIdentifierEq (a : FJIdentifier) (b : FJIdentifier) : Bool =
+    stringEq a b;
 
 let fjIdentifier : Parser[PString] =
     let inner : Parser[PString] =
@@ -101,6 +110,49 @@ let rec fjExprToString (expr : FJExpr) : String =
      |  FJIntLiteral i                  -> "FJIntLiteral \{i}"
      |  FJSelfMethodInvoke m e2list     -> "FJSelfMethodInvoke \{m}, (\{pListToString[FJExpr] fjExprToString e2list})"
      |  FJBracketSurroundedExpr e       -> "FJBracketSurroundedExpr \{fjExprToString e}";
+
+let rec fjExprEq (a : FJExpr) (b : FJExpr) : Bool =
+    case a of
+        FJVariable x1 -> {
+            case b of
+                FJVariable x2   -> fjIdentifierEq x1 x2
+             |  _               -> False
+        }
+     |  FJFieldAccess e1 f1 -> {
+            case b of
+                FJFieldAccess e2 f2 -> (fjExprEq e1 e2) && (fjIdentifierEq f1 f2)
+             |  _                   -> False
+        }
+     |  FJMethodInvoke c1 m1 elist1 -> {
+            case b of
+                FJMethodInvoke c2 m2 elist2 -> (fjExprEq c1 c2) && (fjIdentifierEq m1 m2) && (pListEq[FJExpr] fjExprEq elist1 elist2)
+             |  _                        -> False
+        }
+     |  FJSelfMethodInvoke m1 elist1 -> {
+            case b of
+                FJSelfMethodInvoke m2 elist2 -> (fjIdentifierEq m1 m2) && (pListEq[FJExpr] fjExprEq elist1 elist2)
+             |  _                            -> False
+        }
+     |  FJAllocate c1 elist1 -> {
+            case b of
+                FJAllocate c2 elist2 -> (fjTypeEq c1 c2) && (pListEq[FJExpr] fjExprEq elist1 elist2)
+             |  _                    -> False
+        }
+     |  FJTypeCast c1 e1 -> {
+            case b of
+                FJTypeCast c2 e2 -> (fjTypeEq c1 c2) && (fjExprEq e1 e2)
+             |  _                -> False
+        }
+     |  FJIntLiteral i1 -> {
+            case b of
+                FJIntLiteral i2 -> (stringEq i1 i2)
+             |  _               -> False
+        }
+     |  FJBracketSurroundedExpr e1 -> {
+            case b of
+                FJBracketSurroundedExpr e2 -> fjExprEq e1 e2
+             |  _                          -> False
+        };
 
 -- x
 let fjExprVariable : Parser[FJExpr] =

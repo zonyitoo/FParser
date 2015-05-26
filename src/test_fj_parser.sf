@@ -1,10 +1,35 @@
 {-#
     INCLUDE "fj_parser.sf"
     INCLUDE "testfx.sf"
+    INCLUDE "test_parser_helpers.sf"
 #-}
+
+let testFJExprVariable : TestFn = {
+    name = "Test Varialbe a",
+    fn   = \(__ : Unit) -> {
+        assertFirstParseResultEq[FJExpr]
+            fjExprEq
+            fjExprToString
+            (fjExpr `parseString[FJExpr]` "a")
+            (FJVariable "a")
+    }
+};
+
+let testFJFieldAccess : TestFn = {
+    name = "Test Field Access",
+    fn   = \(__ : Unit) -> {
+        assertParseStringResult[FJExpr]
+            fjExprEq
+            fjExprToString
+            (FJFieldAccess (FJVariable "a") "b")
+            fjExpr
+            "a.b"
+    }
+};
 
 let testFJParserSuite : TestSuite = {
     name = "Test Feather Weight Java parser",
-    fns  = (Nil[TestFn])
+    fns  = testFJExprVariable
+                +>[TestFn] (testFJFieldAccess
+                +>[TestFn] (Nil[TestFn]))
 };
-

@@ -30,7 +30,24 @@ let testFJFieldAccess : TestFn = {
 let testFJMethodInvoke : TestFn = {
     name = "Test Method Invoke",
     fn   = \(__ : Unit) ->
-        False
+        assertParseStringResult[FJExpr]
+            fjExprEq
+            fjExprToString
+            (FJMethodInvoke (FJVariable "a") "b" (Nil[FJExpr]))
+            fjExpr
+            "a.b()"
+};
+
+let testFJAllocate : TestFn = {
+    name = "Test FJ Allocate",
+    fn   = \(__ : Unit) -> {
+        assertParseStringResult[FJExpr]
+            fjExprEq
+            fjExprToString
+            (FJAllocate (FJType "A") (Nil[FJExpr]))
+            fjExpr
+            "new A()"
+    }
 };
 
 let testFJParserSuite : TestSuite = {
@@ -38,5 +55,6 @@ let testFJParserSuite : TestSuite = {
     fns  = testFJExprVariable
                 +>[TestFn] (testFJFieldAccess
                 +>[TestFn] (testFJMethodInvoke
-                +>[TestFn] (Nil[TestFn])))
+                +>[TestFn] (testFJAllocate
+                +>[TestFn] (Nil[TestFn]))))
 };

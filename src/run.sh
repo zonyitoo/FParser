@@ -26,7 +26,7 @@ while [[ $# > 0 ]]; do
         exit $?;
     fi
 
-    rm "$COMBINED_FILE"
+    #rm "$COMBINED_FILE"
 
     shift
 done

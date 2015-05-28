@@ -1,0 +1,42 @@
+{-# INCLUDE "lplist.sf" #-}
+{-# INCLUDE "pstring_ref.sf" #-}
+{-# INCLUDE "thunk.sf" #-}
+
+-- ADT String
+
+type LPString = LPList[Char];
+
+let lPStringToString (l : LPString) : String =
+    (lFoldl[Char, java.lang.StringBuilder]
+        (\(b : java.lang.StringBuilder) (a : Char) -> b.append(a))
+        (new java.lang.StringBuilder( ))
+        l).toString();
+
+let rec lPStringToPString (l : LPString) : PString =
+    case l of
+        LNil        -> (Nil[Char])
+     |  LCons x xs  -> Cons[Char] x (lPStringToPString (invoke[LPString] xs));
+
+let lPStringFromString (str : String) : LPString =
+    let rec inner (str : String) (idx : Int) : LPString =
+        if idx `intEq` str.length() then
+            (LNil[Char])
+        else
+            (LCons[Char] str.charAt(idx) (\(__ : Unit) -> (inner str (idx+1))));
+    inner str 0;
+
+let rec lPStringFromPString (str : PString) : LPString =
+    case str of
+        Nil         -> (LNil[Char])
+     |  Cons x xs   -> (LCons[Char] x (\(__ : Unit) -> (lPStringFromPString xs)));
+
+let rec lPStringEq (a : LPString) (b : LPString) : Bool =
+    lPListEq[Char] charEq a b;
+
+let rec lCharin (c : Char) (str : LPString) : Bool =
+    case str of
+        LNil         ->      False
+     |  LCons x xs   ->      if x.equals(c) then
+                                True
+                            else
+                                (lCharin c (invoke[LPString] xs));

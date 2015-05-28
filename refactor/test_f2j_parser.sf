@@ -1,0 +1,492 @@
+{-# INCLUDE "f2j_parser.sf" #-}
+
+let printFirstF2JParseResult (l : ParseOutput[F2JExpr]) =
+    let result =
+        case l of
+            Nil             -> "Empty result!"
+         |  Cons x _        -> "Result: \{f2jExprToString x._1}\nRemains: \{parseInputToString x._2}";
+
+    println result;
+
+let testF2JParserComment : TestFn = {
+    name = "Single line comment\t`-- abchahaha`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JComment]
+            f2jCommentToString
+            (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha")));
+        True
+    }
+};
+
+let testF2JParserCommentMultipleLines : TestFn = {
+    name = "Multiple line comment",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JComment]
+            f2jCommentToString
+            (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
+        True
+    }
+};
+
+let testF2JParserBlockComment : TestFn = {
+    name = "Block comment",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JComment]
+                    f2jCommentToString
+                    (f2jComment `parsePString[F2JComment]` (pStringFromString "{- abchahaha -}")));
+        True
+    }
+};
+
+let testF2JParserType : TestFn = {
+    name = "Type\t`A[B, C[D]]`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JType]
+            f2jTypeToString
+            (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
+        True
+    }
+};
+
+let testF2JParserPairedType : TestFn = {
+    name = "Paired type\t`(A, B)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JType]
+            f2jTypeToString
+            (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
+        True
+    }
+};
+
+let testF2JParserFunctionType : TestFn = {
+    name = "Function type\t`(A[C] -> B)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JType]
+            f2jTypeToString
+            (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")));
+        True
+    }
+};
+
+let testF2JParserFunctionType2 : TestFn = {
+    name = "Function type\t`A -> B`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JType]
+            f2jTypeToString
+            (f2jType `parsePString[F2JType]` (pStringFromString "A -> B")));
+        True
+    }
+};
+
+let testF2JParserBindParam : TestFn = {
+    name = "Binding parameter\t`(a : PList[A])`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JBindingParam]
+            f2jBindingParamToString
+            (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
+        True
+    }
+};
+
+let testF2JParserBindParams : TestFn = {
+    name = "Binding parameters\t`(a : PList[A]) (b : PString)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[PList[F2JBindingParam]]
+            (pListToString[F2JBindingParam] f2jBindingParamToString)
+            (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
+        True
+    }
+};
+
+let testF2JParserTypeAlias : TestFn = {
+    name = "Type alias\t`type Ha[A] = Fucker; 123`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jTypeAlias `parseString[F2JExpr]` "type Ha[A] = Fucker; 123"));
+        True
+    }
+};
+
+let testF2JParserADT : TestFn = {
+    name = "ADT\t`data PList[A] = Nil | Cons A (PList[A]) and X = X; 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jADT `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]) and X = X; 1"));
+        True
+    }
+};
+
+let testF2JParserADTRecord : TestFn = {
+    name = "ADT\t`data X = { name : String, age : Int }; 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jADT `parseString[F2JExpr]` "data X = { name : String, age : Int }; 1"));
+        True
+    }
+};
+
+
+let testF2JParserPair : TestFn = {
+    name = "Pair\t`(1,2,3)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jPair `parseString[F2JExpr]` "(1,2,3)"));
+        True
+    }
+};
+
+let testF2JParserLambda : TestFn = {
+    name = "Lambda\t`\\(a : A) -> 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jLambda `parseString[F2JExpr]` "\\(a : A) -> 1"));
+        True
+    }
+};
+
+let testF2JParserLet : TestFn = {
+    name = "Let\t`let fn[A] (a : A) : A = a; fn`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jLet `parseString[F2JExpr]` "let fn[A] (a : A) : A = a; fn"));
+        True
+    }
+};
+
+let testF2JParserLet2 : TestFn = {
+    name = "Let\t`let x = x; 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jLet `parseString[F2JExpr]` "let x = x; 1"));
+        True
+    }
+};
+
+let testF2JParserLetRec : TestFn = {
+    name = "LetRec\t`let rec fn[A] (a : A) : A = a; fn`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jLet `parseString[F2JExpr]` "let rec fn[A] (a : A) : A = a; fn"));
+        True
+    }
+};
+
+let testF2JParserLetRec2 : TestFn = {
+    name = "LetRec\t`let rec r[A] (a : A) : A = r[A] a; 1`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jLet `parseString[F2JExpr]` "let rec r[A] (a : A) : A = r[A] a; 1"));
+        True
+    }
+};
+
+let testF2JParserIntLiteral : TestFn = {
+    name = "Integer Literal\t`123`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+            f2jExprToString
+            (f2jIntLiterial `parseString[F2JExpr]` "123"));
+        True
+    }
+};
+
+let testF2JParserApplication : TestFn = {
+    name = "Application\t`a b`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jApplication `parseString[F2JExpr]` "a b"));
+        True
+    }
+};
+
+let testF2JParserApplication2 : TestFn = {
+    name = "Application\t`(a b)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "(a b)"));
+        True
+    }
+};
+
+let testF2JParserApplication3 : TestFn = {
+    name = "Application\t`a b c`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "a b c"));
+        True
+    }
+};
+
+let testF2JParserApplication4 : TestFn = {
+    name = "Application\t`a (b c)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "a (b c)"));
+        True
+    }
+};
+
+let testF2JParserApplication5 : TestFn = {
+    name = "Application\t`let x = x; a (b c)`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "let x = x; a (b c)"));
+        True
+    }
+};
+
+let testF2JParserApplication6 : TestFn = {
+    name = "Application\t`a[A]`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "a[A]"));
+        True
+    }
+};
+
+let testF2JParserApplication7 : TestFn = {
+    name = "Application\t`a[A] b`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jExpr `parseString[F2JExpr]` "a[A] b"));
+        True
+    }
+};
+
+let testF2JParserApplication8 : TestFn = {
+    name = "Application\t`a[A] b`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jProgram `parseString[F2JExpr]` "a[A] b"));
+        True
+    }
+};
+
+let testF2JParserApplication9 : TestFn = {
+    name = "Application\t`what the fuck`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jProgram `parseString[F2JExpr]` "what the fuck"));
+        True
+    }
+};
+
+
+let testF2JParserCase : TestFn = {
+    name = "Case\t`case l of Nil -> 1 | Cons x xs -> 2`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jCase `parseString[F2JExpr]` "case l of Nil -> 1 | Cons x xs -> 2"));
+        True
+    }
+};
+
+let testF2JParserBlock : TestFn = {
+    name = "Block\t`{a; b}`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jBlockOrRecord `parseString[F2JExpr]` "{a; b}"));
+        True
+    }
+};
+
+let testF2JParserRecord : TestFn = {
+    name = "Block\t`{ x = 1, y = 2 }`",
+    fn   = \(x : Unit) -> {
+        println (parseOutputToString[F2JExpr]
+                    f2jExprToString
+                    (f2jBlockOrRecord `parseString[F2JExpr]` "{ x = 1, y = 2 }"));
+        True
+    }
+};
+
+let testF2JFull : TestFn = {
+    name = "Full test\t`let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}`",
+    fn   = \(x : Unit) -> {
+        --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
+        printFirstF2JParseResult
+            (f2jExpr `parseString[F2JExpr]` "let x = x; data PList[A] = Nil | Cons A (PList[A]); data X = X; {a; b}");
+        -- println (parseOutputToString[F2JExpr]
+        --             f2jExprToString
+        --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
+        --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+        True
+    }
+};
+
+let testF2JFull2 : TestFn = {
+    name = "Full test\t`data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1`",
+    fn   = \(x : Unit) -> {
+        --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
+        printFirstF2JParseResult
+            (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1");
+        -- println (parseOutputToString[F2JExpr]
+        --             f2jExprToString
+        --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
+        --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+        True
+    }
+};
+
+let testF2JFull3 : TestFn = {
+    name = "Full test\t`data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1`",
+    fn   = \(x : Unit) -> {
+        --printFirstF2JParseResult (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1")
+        printFirstF2JParseResult
+            (f2jProgram `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1");
+        -- println (parseOutputToString[F2JExpr]
+        --             f2jExprToString
+        --             -- (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[A] = case l of Nil -> (Nil[A]) | Cons x xs -> Cons[B] (f x) (map[A, B] f xs); 1"))
+        --             (f2jExpr `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); data X = X; 1"))
+        True
+    }
+};
+
+
+let testF2JParserSuite : TestSuite = {
+    name = "Test F2J Parser",
+    fns  = testF2JParserComment
+            +>[TestFn] (testF2JParserCommentMultipleLines
+            +>[TestFn] (testF2JParserBlockComment
+            +>[TestFn] (testF2JParserType
+            +>[TestFn] (testF2JParserPairedType
+            +>[TestFn] (testF2JParserFunctionType
+            +>[TestFn] (testF2JParserFunctionType2
+            +>[TestFn] (testF2JParserBindParam
+            +>[TestFn] (testF2JParserBindParams
+            +>[TestFn] (testF2JParserTypeAlias
+            +>[TestFn] (testF2JParserADT
+            +>[TestFn] (testF2JParserADTRecord
+            +>[TestFn] (testF2JParserPair
+            +>[TestFn] (testF2JParserLambda
+            +>[TestFn] (testF2JParserLet
+            +>[TestFn] (testF2JParserLet2
+            +>[TestFn] (testF2JParserLetRec
+            +>[TestFn] (testF2JParserLetRec2
+            +>[TestFn] (testF2JParserIntLiteral
+            +>[TestFn] (testF2JParserApplication
+            +>[TestFn] (testF2JParserApplication2
+            +>[TestFn] (testF2JParserApplication3
+            +>[TestFn] (testF2JParserApplication4
+            +>[TestFn] (testF2JParserApplication5
+            +>[TestFn] (testF2JParserApplication6
+            +>[TestFn] (testF2JParserApplication7
+            +>[TestFn] (testF2JParserApplication8
+            +>[TestFn] (testF2JParserApplication9
+            +>[TestFn] (testF2JParserCase
+            +>[TestFn] (testF2JParserBlock
+            +>[TestFn] (testF2JParserRecord
+            +>[TestFn] (testF2JFull
+            +>[TestFn] (testF2JFull2
+            +>[TestFn] (testF2JFull3
+            +>[TestFn] (Nil[TestFn]))))))))))))))))))))))))))))))))))
+};
+
+-- {
+
+--     println (parseOutputToString[F2JComment]
+--                 f2jCommentToString
+--                 (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha")));
+
+--     println (parseOutputToString[F2JComment]
+--                 f2jCommentToString
+--                 (f2jComment `parsePString[F2JComment]` (pStringFromString "-- abchahaha\n-- second line\nnormal")));
+
+--     println (parseOutputToString[F2JComment]
+--                 f2jCommentToString
+--                 (f2jComment `parsePString[F2JComment]` (pStringFromString "{- abchahaha -}")));
+
+--     println (parseOutputToString[Unit]
+--                 unitToString
+--                 (eol `parsePString[Unit]` (pStringFromString "\nabcde")));
+
+--     println (parseOutputToString[F2JType]
+--                 f2jTypeToString
+--                 (f2jType `parsePString[F2JType]` (pStringFromString "A[B, C[D]]")));
+
+--     println (parseOutputToString[F2JType]
+--                 f2jTypeToString
+--                 (f2jType `parsePString[F2JType]` (pStringFromString "(A, B)")));
+
+--     println (parseOutputToString[F2JBindingParam]
+--                 f2jBindingParamToString
+--                 (f2jBindingParam `parsePString[F2JBindingParam]` (pStringFromString "(a : PList[A])")));
+
+--     println (parseOutputToString[PList[F2JBindingParam]]
+--                 (pListToString[F2JBindingParam] f2jBindingParamToString)
+--                 (f2jBindingParams `parsePString[PList[F2JBindingParam]]` (pStringFromString "(a : PList[A]) (b : PString)")));
+
+--     println (parseOutputToString[PString]
+--                 pStringToString
+--                 (f2jBindingName `parseString[PString]` "parseOutputToString"));
+
+--     println (parseOutputToString[PString]
+--                 pStringToString
+--                 (f2jBindingName `parseString[PString]` "(<!>)"));
+
+--     println (parseOutputToString[F2JType]
+--                 f2jTypeToString
+--                 (f2jType `parsePString[F2JType]` (pStringFromString "((A))")));
+
+--     println (parseOutputToString[F2JType]
+--                 f2jTypeToString
+--                 (f2jType `parsePString[F2JType]` (pStringFromString "(A[C] -> B)")));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jIntLiterial `parseString[F2JExpr]` "123"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jTypeAlias `parseString[F2JExpr]` "type Ha[A] = Fucker; 123"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jADT `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); 1"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jPair `parseString[F2JExpr]` "(1,2,3)"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jLambda `parseString[F2JExpr]` "\\(a : A) -> 1"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jVariable `parseString[F2JExpr]` "a"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jBlock `parseString[F2JExpr]` "{ a; b }"));
+
+--     -- println (parseOutputToString[F2JExpr]
+--     --             f2jExprToString
+--     --             (f2jApplication `parseString[F2JExpr]` "a b"));
+
+--     println (parseOutputToString[F2JExpr]
+--                 f2jExprToString
+--                 (f2jLet `parseString[F2JExpr]` "let fn[A] (a : A) : A = a; fn"));
+
+--     "\n-- END --"
+-- }

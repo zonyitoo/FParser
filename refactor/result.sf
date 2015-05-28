@@ -1,0 +1,22 @@
+-- Result definition
+data Result[S, E] = Ok S
+                  | Err E
+                  ;
+
+let resultEq[S, E] (eqs : Eq[S]) (eqe : Eq[E]) (a : Result[S, E]) (b : Result[S, E]) : Bool =
+    case a of
+        Ok s1 -> {
+            case b of
+                Ok s2 -> eqs s1 s2
+             |  Err _ -> False
+        }
+     |  Err e1 -> {
+            case b of
+                Ok _   -> False
+             |  Err e2 -> eqe e1 e2
+        };
+
+let resultToString[S, E] (sToStr : Show[S]) (eToStr : Show[E]) (r : Result[S, E]) : String =
+    case r of
+        Ok s    -> "Ok \{sToStr s}"
+     |  Err e   -> "Err \{eToStr e}";

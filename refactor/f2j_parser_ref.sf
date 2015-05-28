@@ -1,0 +1,598 @@
+{-#
+    INCLUDE "parser.sf"
+#-}
+
+-- F2J Parser
+
+data F2JType = F2JNormalType    String PList[F2JType]
+             | F2JPairedType    PList[F2JType]
+             | F2JFunctionType  F2JType F2JType
+             ;
+
+let rec f2jTypeToString (t : F2JType) : String =
+    case t of
+        F2JNormalType name params ->
+            "F2JNormalType \{name} \{pListToString[F2JType] f2jTypeToString params}"
+     |  F2JPairedType types ->
+            "F2JPairedType \{pListToString[F2JType] f2jTypeToString types}"
+     |  F2JFunctionType from to ->
+            "F2JFunctionType (\{f2jTypeToString from} -> \{f2jTypeToString to})";
+
+let rec f2jTypeEq (a : F2JType) (b : F2JType) : Bool =
+    case a of
+        F2JNormalType n1 p1 -> {
+            case b of
+                F2JNormalType n2 p2 -> (n1 `stringEq` n2) && (pListEq[F2JType] f2jTypeEq p1 p2)
+             |  F2JPairedType _     -> False
+             |  F2JFunctionType _ _ -> False
+        }
+     |  F2JPairedType t1 -> {
+            case b of
+                F2JNormalType _ _   -> False
+             |  F2JPairedType t2    -> pListEq[F2JType] f2jTypeEq t1 t2
+             |  F2JFunctionType _ _ -> False
+        }
+     |  F2JFunctionType t1f t1t -> {
+            case b of
+                F2JNormalType _ _       -> False
+             |  F2JPairedType _         -> False
+             |  F2JFunctionType t2f t2t -> (t1f `f2jTypeEq` t2f) && (t1t `f2jTypeEq` t2t)
+        };
+
+data F2JBindingParam = F2JBindingParam String F2JType;
+
+let f2jBindingParamToString (b : F2JBindingParam) : String =
+    case b of
+        F2JBindingParam id t ->
+            "F2JBindingParam \{id} \{f2jTypeToString t}";
+
+let f2jBindingParamEq (a : F2JBindingParam) (b : F2JBindingParam) : Bool =
+    case a of
+        F2JBindingParam ida ta ->
+            case b of
+                F2JBindingParam idb tb ->
+                    (ida `stringEq` idb) && (ta `f2jTypeEq` tb);
+
+data F2JADTAlternative = F2JADTAlternative String PList[F2JType];
+
+let f2jADTAlternativeToString (a : F2JADTAlternative) : String =
+    case a of
+        F2JADTAlternative name args ->
+            "F2JADTAlternative \{name} \{pListToString[F2JType] f2jTypeToString args}";
+
+data F2JADTRecordItem = F2JADTRecordItem String F2JType;
+
+let f2jADTRecordItemToString (a : F2JADTRecordItem) : String =
+    case a of
+        F2JADTRecordItem id t ->
+            "F2JADTRecordItem \{id} \{f2jTypeToString t}";
+
+data F2JADTBody = F2JADTNormalBody F2JType PList[F2JADTAlternative]
+                | F2JADTRecordBody F2JType PList[F2JADTRecordItem]
+                ;
+
+let f2jADTBodyToString (a : F2JADTBody) : String =
+    case a of
+        F2JADTNormalBody t alts ->
+            "F2JADTNormalBody \{f2jTypeToString t} \{pListToString[F2JADTAlternative] f2jADTAlternativeToString alts}"
+     |  F2JADTRecordBody t items ->
+            "F2JADTRecordBody \{f2jTypeToString t} \{pListToString[F2JADTRecordItem] f2jADTRecordItemToString items}"
+     ;
+
+data rec
+    F2JBindingBody = F2JLetBindingBody     String PList[F2JType] PList[F2JBindingParam] Maybe[F2JType] F2JExpr
+                   | F2JLetRecBindingBody  String PList[F2JType] PList[F2JBindingParam] F2JType        F2JExpr
+
+and F2JApplicationParam = F2JApplicationParamExpr F2JExpr
+                        | F2JApplicationParamType PList[F2JType]
+
+and F2JCaseAlternative = F2JCaseAlternative String PList[String] F2JExpr
+
+and F2JRecordItem = F2JRecordItem String F2JExpr
+
+            -- Application
+and F2JExpr = F2JApplication        F2JExpr                  F2JApplicationParam
+            -- Let binding                              ; expr
+            | F2JLet                PList[F2JBindingBody]    F2JExpr
+            -- Let rec binding                          ; expr
+            | F2JLetRec             PList[F2JBindingBody]    F2JExpr
+            -- Lambda function params                   inner expr
+            | F2JLambda             PList[F2JBindingParam]   F2JExpr
+            -- case of
+            | F2JCase               F2JExpr                  PList[F2JCaseAlternative]
+            -- ADT
+            | F2JADT                PList[F2JADTBody]        F2JExpr
+            | F2JRecADT             PList[F2JADTBody]        F2JExpr
+            -- Alias
+            | F2JTypeAlias          F2JType                  F2JType                     F2JExpr
+            -- Tuple
+            | F2JPair               PList[F2JExpr]
+            -- Int literal
+            | F2JIntLiteral         String
+            -- Double literal
+            -- Long literal
+            -- Short literal
+            -- Byte literal
+            -- String Literal
+            | F2JStringLiteral      String
+            | F2JVariable           String
+            | F2JBlock              PList[F2JExpr]
+            | F2JRecord             PList[F2JRecordItem]
+            ;
+
+let rec f2jBindingBodyToString (b : F2JBindingBody) : String =
+    case b of
+        F2JLetBindingBody name args params rettype expr ->
+            "F2JLetBindingBody \{name} \{pListToString[F2JType] f2jTypeToString args} \{pListToString[F2JBindingParam] f2jBindingParamToString params} \{maybeToString[F2JType] f2jTypeToString rettype} \{f2jExprToString expr}"
+     |  F2JLetRecBindingBody name args params rettype expr ->
+            "F2JLetRecBindingBody \{name} \{pListToString[F2JType] f2jTypeToString args} \{pListToString[F2JBindingParam] f2jBindingParamToString params} \{f2jTypeToString rettype} \{f2jExprToString expr}"
+
+and f2jApplicationParamToString (p : F2JApplicationParam) : String =
+    case p of
+        F2JApplicationParamExpr expr ->
+            "F2JApplicationParamExpr \{f2jExprToString expr}"
+     |  F2JApplicationParamType t ->
+            "F2JApplicationParamType \{pListToString[F2JType] f2jTypeToString t}"
+
+and f2jCaseAlternativeToString (c : F2JCaseAlternative) : String =
+    case c of
+        F2JCaseAlternative name args expr ->
+            "F2JCaseAlternative \{name} \{pListToString[String] stringToString args} -> \{f2jExprToString expr}"
+
+and f2jRecordItemToString (c : F2JRecordItem) : String =
+    case c of
+        F2JRecordItem name expr ->
+            "F2JRecordItem \{name} \{f2jExprToString expr}"
+
+and f2jExprToString (e : F2JExpr) : String =
+    case e of
+        F2JApplication expr param ->
+            "F2JApplication \{f2jExprToString expr}, \{f2jApplicationParamToString param}"
+     |  F2JLet body expr ->
+            "F2JLet \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
+     |  F2JLetRec body expr ->
+            "F2JLetRec \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
+     |  F2JLambda params expr ->
+            "F2JLambda \{pListToString[F2JBindingParam] f2jBindingParamToString params}, \{f2jExprToString expr}"
+     |  F2JCase e alts ->
+            "F2JCase \{f2jExprToString e}, \{pListToString[F2JCaseAlternative] f2jCaseAlternativeToString alts}"
+     |  F2JADT body expr ->
+            "F2JADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
+     |  F2JRecADT body expr ->
+            "F2JRecADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
+     |  F2JTypeAlias t target expr ->
+            "F2JTypeAlias \{f2jTypeToString t}, \{f2jTypeToString target}, \{f2jExprToString expr}"
+     |  F2JPair conts ->
+            "F2JPair \{pListToString[F2JExpr] f2jExprToString conts}"
+     |  F2JIntLiteral s ->
+            "F2JIntLiteral \{s}"
+     |  F2JStringLiteral s ->
+            "F2JStringLiteral \{s}"
+     |  F2JVariable s ->
+            "F2JVariable \{s}"
+     |  F2JBlock e ->
+            "F2JBlock \{pListToString[F2JExpr] f2jExprToString e}"
+     |  F2JRecord items ->
+            "F2JRecord \{pListToString[F2JRecordItem] f2jRecordItemToString items}"
+     ;
+
+data F2JComment = F2JLineComment String
+                | F2JBlockComment String
+                ;
+
+let f2jCommentToString (tok : F2JComment) : String =
+    case tok of
+        F2JLineComment cmt         -> "F2JLineComment ".concat(cmt)
+     |  F2JBlockComment cmt        -> "F2JBlockComment ".concat(cmt);
+
+let f2jLineComment : Parser[F2JComment] =
+    (string "--")
+        *>[LPString, LPString]   (many[Char] (noneof "\r\n"))
+        <*[LPString, Unit]       (eol <|>[Unit] eof)
+        <$>[LPString, F2JComment] (\(cmt : LPString) -> F2JLineComment (lPStringToString cmt));
+
+let f2jBlockComment : Parser[F2JComment] =
+    let rec nested : Parser[LPString] =
+        (string "{-");
+
+    (string "{-")
+        *>[LPString, LPString] (many[Char] item) -- Need to support nested block comment
+        <*[LPString, LPString] (string "-}")
+        <$>[LPString, F2JComment] (\(cmt : LPString) -> F2JBlockComment (lPStringToString cmt));
+
+let f2jComment : Parser[F2JComment] =
+    f2jLineComment <|>[F2JComment] f2jBlockComment;
+
+let f2jSpace : Parser[Unit] =
+    many[Char] whitespace $>[LPList[Char], Unit] ();
+
+let f2jSpace1 : Parser[Unit] =
+    many1[Char] whitespace $>[LPList[Char], Unit] ();
+
+let f2jBetween[L, R, P] (l : Parser[L]) (r : Parser[R]) (p : Parser[P]) : Parser[P] =
+    between[L, R, P] (l <*[L, Unit] f2jSpace) (f2jSpace *>[Unit, R] r) p;
+
+let f2jInfixOpName : Parser[LPString] =
+    many1[Char] (oneof "!#$%&*+./<=>?@\\^|-~");
+
+let f2jTypeName : Parser[LPString] =
+    upper                                           >>=[Char, LPString]      (\(x : Char) ->
+    (many[Char] (alphanum <|>[Char] (char '_')))    >>=[LPString, LPString]   (\(xs : LPString) ->
+    result[LPString] (x %+>[Char] xs)));
+
+let f2jKeyword (k : String) : Parser[LPString] =
+    string k;
+
+let f2jKeywordLet : Parser[LPString] =
+    f2jKeyword "let";
+
+let f2jKeywordRec : Parser[LPString] =
+    f2jKeyword "rec";
+
+let f2jKeywordAnd : Parser[LPString] =
+    f2jKeyword "and";
+
+let f2jKeywordData : Parser[LPString] =
+    f2jKeyword "data";
+
+let f2jKeywordType : Parser[LPString] =
+    f2jKeyword "type";
+
+let f2jKeywordCase : Parser[LPString] =
+    f2jKeyword "case";
+
+let f2jKeywordOf : Parser[LPString] =
+    f2jKeyword "of";
+
+-- [...]
+let rec f2jTypeParams : Parser[PList[F2JType]] =
+    f2jBetween[Char, Char, PList[F2JType]] (char '[') (char ']')
+        ((sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+            <$>[LPList[F2JType], PList[F2JType]] (\(t : LPList[F2JType]) -> lPListToPList[F2JType] t))
+-- (.., .., ..)
+and f2jPairedType : Parser[F2JType] =
+    f2jBetween[Char, Char, F2JType] (char '(') (char ')')
+        ((sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+            >>=[LPList[F2JType], F2JType] (\(types : LPList[F2JType]) ->
+
+                (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                    let ftypefrom = F2JPairedType (lPListToPList[F2JType] types);
+                    result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+                <|>[F2JType]
+                (result[F2JType] (F2JPairedType (lPListToPList[F2JType] types)))
+            ))
+-- (..)
+and f2jSinglePairedType : Parser[F2JType] =
+    f2jBetween[Char, Char, F2JType] (char '(') (char ')')
+        (f2jType >>=[F2JType, F2JType] (\(t : F2JType) ->
+
+            (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                let ftypefrom = t;
+                result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+            <|>[F2JType]
+                result[F2JType] t))
+-- (-> A)
+and f2jFunctionTypeRest : Parser[F2JType] =
+    (string "->") >>[LPString, Unit] f2jSpace >>[Unit, F2JType] f2jType
+
+-- A[..] / A -> A
+and f2jSingleType : Parser[F2JType] =
+    (f2jTypeName)                                                                                                       >>=[LPString, F2JType]        (\(typename : LPString) ->
+        ((f2jSpace >>[Unit, PList[F2JType]] f2jTypeParams) <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(tparams : PList[F2JType]) ->
+
+            (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                let ftypefrom = F2JNormalType (lPStringToString typename) tparams;
+                result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+            <|>[F2JType]
+            (result[F2JType] (F2JNormalType (lPStringToString typename) tparams))
+
+        ))
+-- Only support A[..], just for `data` and `type` definitions
+and f2jNormalType : Parser[F2JType] =
+    (f2jTypeName <*[LPString, Unit] f2jSpace) >>=[LPString, F2JType] (\(tstr : LPString) ->
+        ((f2jTypeParams <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(params : PList[F2JType]) ->
+            result[F2JType] (F2JNormalType (lPStringToString tstr) params))))
+
+and f2jType : Parser[F2JType] =
+        f2jSingleType
+    <|>[F2JType]
+        f2jSinglePairedType
+    <|>[F2JType]
+        f2jPairedType;
+
+-- ( a : A )
+let f2jBindingParam : Parser[F2JBindingParam] =
+    let seperator =
+        f2jSpace >>[Unit, Char] (char ':') >>[Char, Unit] f2jSpace;
+
+    let binding =
+        (ident <*[LPString, Unit] seperator) >>=[LPString, F2JBindingParam] (\(id : LPString) ->
+            f2jType <$>[F2JType, F2JBindingParam] (\(t : F2JType) ->
+            F2JBindingParam (lPStringToString id) t));
+
+    f2jBetween[Char, Char, F2JBindingParam] (char '(') (char ')')
+        binding;
+-- ( a : A ) ( b : B )
+let f2jBindingParams : Parser[PList[F2JBindingParam]] =
+    sepby[F2JBindingParam, Unit] f2jBindingParam f2jSpace
+        <$>[LPList[F2JBindingParam], PList[F2JBindingParam]] (lPListToPList[F2JBindingParam]);
+
+-- The name for `let` and `and`, such as `let a` and `let (<+>)`
+let f2jBindingName : Parser[LPString] =
+        ident
+    <|>[LPString]
+        f2jBetween[Char, Char, LPString] (char '(') (char ')') f2jInfixOpName;
+
+-- 12345
+let rec f2jIntLiterial : Parser[F2JExpr] =
+    let nat : Parser[LPString] =
+        many1[Char] digit;
+    (nat <|>[LPString]
+        (char '-' >>=[Char, LPString]
+            (\(minus : Char) -> nat >>=[LPString, LPString]
+                (\(n : LPString) -> result[LPString] (minus %+>[Char] n)))))
+    <$>[LPString, F2JExpr]
+        (\(nstr : LPString) -> F2JIntLiteral (lPStringToString nstr));
+
+-- FIXME: This one should co-operate with f2jApplication
+-- Just `a` or `(a)`
+let f2jVariable : Parser[F2JExpr] =
+    let f2jVariableName : Parser[LPString] =
+            ident
+        <|>[LPString]
+            f2jInfixOpName;
+
+    let rec f2jVariable' : Parser[F2JExpr] =
+        let f2jVariableWithBracket : Parser[F2JExpr] =
+            f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jVariable';
+        (f2jVariableName <$>[LPString, F2JExpr] (\(s : LPString) -> F2JVariable (lPStringToString s)))
+            <|>[F2JExpr] f2jVariableWithBracket;
+
+    only[F2JExpr] f2jVariable';
+
+let f2jADTBody : Parser[F2JADTBody] =
+    let f2jADTAlternative : Parser[F2JADTAlternative] =
+        (f2jTypeName <*[LPString, Unit] f2jSpace) >>=[LPString, F2JADTAlternative] (\(tname : LPString) ->
+            (sepby[F2JType, Unit] f2jType f2jSpace <$>[LPList[F2JType], PList[F2JType]] (lPListToPList[F2JType]))
+                >>=[PList[F2JType], F2JADTAlternative] (\(types : PList[F2JType]) ->
+                    result[F2JADTAlternative] (F2JADTAlternative (lPStringToString tname) types)));
+
+    let f2jADTRecordItem : Parser[F2JADTRecordItem] =
+        ident <*[LPString, Unit] (f2jSpace >>[Unit, Char] (char ':') >>[Char, Unit] f2jSpace)
+            >>=[LPString, F2JADTRecordItem] (\(name : LPString) ->
+                f2jType >>=[F2JType, F2JADTRecordItem] (\(t : F2JType) ->
+                    result[F2JADTRecordItem] (F2JADTRecordItem (lPStringToString name) t)));
+
+    let f2jADTBodyRecord : Parser[PList[F2JADTRecordItem]] =
+        f2jBetween[Char, Char, PList[F2JADTRecordItem]] (char '{') (char '}')
+            ((sepby1[F2JADTRecordItem, Unit] f2jADTRecordItem
+                (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+                    <$>[LPList[F2JADTRecordItem], PList[F2JADTRecordItem]] (lPListToPList[F2JADTRecordItem]));
+
+    (f2jNormalType <*[F2JType, Unit] (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace))
+        >>=[F2JType, F2JADTBody] (\(t : F2JType) ->
+            ((sepby1[F2JADTAlternative, Unit] f2jADTAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace)
+                <$>[LPList[F2JADTAlternative], PList[F2JADTAlternative]] (lPListToPList[F2JADTAlternative]))
+                    >>=[PList[F2JADTAlternative], F2JADTBody] (\(alts : PList[F2JADTAlternative]) ->
+                        result[F2JADTBody] (F2JADTNormalBody t alts)))
+
+            <|>[F2JADTBody]
+
+            (f2jADTBodyRecord >>=[PList[F2JADTRecordItem], F2JADTBody] (\(items : PList[F2JADTRecordItem]) ->
+                result[F2JADTBody] (F2JADTRecordBody t items)))
+        );
+
+-- type T = ...
+let rec f2jTypeAlias : Parser[F2JExpr] =
+    ((string "type") <*[LPString, Unit] f2jSpace)
+        >>[LPString, F2JType] f2jNormalType >>=[F2JType, F2JExpr] (\(t : F2JType) ->
+            (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace)
+                >>[Unit, F2JType] f2jType >>=[F2JType, F2JExpr] (\(tar : F2JType) ->
+                    (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace)
+                        >>[Unit, F2JExpr] f2jExpr >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                            result[F2JExpr] (F2JTypeAlias t tar expr))))
+
+-- data T = ...
+and f2jADT : Parser[F2JExpr] =
+    let innerBody : Parser[(PList[F2JADTBody], F2JExpr)] =
+        (((sepby1[F2JADTBody, LPString] f2jADTBody (f2jSpace *>[Unit, LPString] f2jKeywordAnd <*[LPString, Unit] f2jSpace))
+            <$>[LPList[F2JADTBody], PList[F2JADTBody]] (lPListToPList[F2JADTBody]))
+            >>=[PList[F2JADTBody], (PList[F2JADTBody], F2JExpr)] (\(ands : PList[F2JADTBody]) ->
+                (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                    >>=[F2JExpr, (PList[F2JADTBody], F2JExpr)] (\(expr : F2JExpr) ->
+                        result[(PList[F2JADTBody], F2JExpr)] (ands, expr))));
+
+    (f2jKeywordData >>[LPString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        (
+            f2jKeywordRec >>[LPString, Unit] f2jSpace >>[Unit, (PList[F2JADTBody], F2JExpr)]
+                innerBody <$>[(PList[F2JADTBody], F2JExpr), F2JExpr]
+                    (\(x : (PList[F2JADTBody], F2JExpr)) -> F2JRecADT x._1 x._2)
+            <|>[F2JExpr]
+            (innerBody <$>[(PList[F2JADTBody], F2JExpr), F2JExpr]
+                (\(x : (PList[F2JADTBody], F2JExpr)) -> F2JADT x._1 x._2))
+        )
+
+-- (.., ..., ...)
+-- Pair has at least two elements
+and f2jPair : Parser[F2JExpr] =
+    f2jBetween[Char, Char, LPList[F2JExpr]] (char '(') (char ')')
+        (sepby2[F2JExpr, Unit] f2jExpr (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+        <$>[LPList[F2JExpr], F2JExpr] (\(exprs : LPList[F2JExpr]) -> F2JPair (lPListToPList[F2JExpr] exprs))
+
+
+-- \(a : A) (b : B) -> ...
+and f2jLambda : Parser[F2JExpr] =
+    ((char '\\') >>[Char, Unit] f2jSpace)
+        >>[Unit, PList[F2JBindingParam]] f2jBindingParams >>=[PList[F2JBindingParam], F2JExpr] (\(params : PList[F2JBindingParam]) ->
+            (f2jSpace >>[Unit, LPString] (string "->") >>[LPString, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr
+                >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                    result[F2JExpr] (F2JLambda params expr))))
+
+-- `a b`, `a [A]`
+and f2jApplication : Parser[F2JExpr] =
+    let rec f2jApplicationParam : Parser[F2JApplicationParam] =
+        let f2jApplicationParamWithBracket : Parser[F2JApplicationParam] =
+            f2jBetween[Char, Char, F2JApplicationParam] (char '(') (char ')')
+                f2jApplicationParam;
+
+            (f2jExpr <$>[F2JExpr, F2JApplicationParam] (\(expr : F2JExpr) -> F2JApplicationParamExpr expr))
+        <|>[F2JApplicationParam]
+            (f2jTypeParams <$>[PList[F2JType], F2JApplicationParam] (\(t : PList[F2JType]) -> F2JApplicationParamType t))
+        <|>[F2JApplicationParam]
+            (f2jApplicationParamWithBracket);
+
+    -- ((f2jExprWithoutApplication <*[F2JExpr, Unit] f2jSpace) >>=[F2JExpr, F2JExpr] (\(a : F2JExpr) ->
+    --     f2jApplicationParam >>=[F2JApplicationParam, F2JExpr] (\(b : F2JApplicationParam) ->
+    --         result[F2JExpr] (F2JApplication a b))))
+    f2jExprWithoutApplication >>=[F2JExpr, F2JExpr] (\(leftmost : F2JExpr) ->
+        many1[F2JApplicationParam] (f2jSpace >>[Unit, F2JApplicationParam] f2jApplicationParam)
+            >>=[LPList[F2JApplicationParam], F2JExpr] (\(params : LPList[F2JApplicationParam]) ->
+                if lIsempty[F2JApplicationParam] params then
+                    (result[F2JExpr] leftmost)
+                else
+                    (result[F2JExpr] (lFoldl[F2JApplicationParam, F2JExpr] (\(b : F2JExpr) (a : F2JApplicationParam) -> F2JApplication b a) leftmost params))))
+
+and f2jBlockOrRecord : Parser[F2JExpr] =
+    let f2jRecordItem : Parser[F2JRecordItem] =
+        ident <*[LPString, Unit] (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace)
+            >>=[LPString, F2JRecordItem] (\(name : LPString) ->
+                f2jExpr >>=[F2JExpr, F2JRecordItem] (\(expr : F2JExpr) ->
+                    result[F2JRecordItem] (F2JRecordItem (lPStringToString name) expr)));
+
+    f2jBetween[Char, Char, F2JExpr] (char '{') (char '}')
+        (
+            ((sepby1[F2JExpr, Char] f2jExpr (f2jSpace *>[Unit, Char] (char ';') <*[Char, Unit] f2jSpace))
+                <$>[LPList[F2JExpr], F2JExpr] (\(e : LPList[F2JExpr]) -> F2JBlock (lPListToPList[F2JExpr] e)))
+
+            <|>[F2JExpr]
+
+            ((sepby1[F2JRecordItem, Char] f2jRecordItem (f2jSpace *>[Unit, Char] (char ',') <*[Char, Unit] f2jSpace))
+                <$>[LPList[F2JRecordItem], F2JExpr] (\(items : LPList[F2JRecordItem]) -> F2JRecord (lPListToPList[F2JRecordItem] items)))
+        )
+
+and f2jLet : Parser[F2JExpr] =
+    let f2jLetOptionalTypeParams : Parser[PList[F2JType]] =
+        f2jTypeParams <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]));
+
+    let f2jLetOptionalBindingParams : Parser[PList[F2JBindingParam]] =
+        f2jBindingParams <|>[PList[F2JBindingParam]] (result[PList[F2JBindingParam]] (Nil[F2JBindingParam]));
+
+    let f2jLetBindingBody : Parser[F2JBindingBody] =
+        (f2jBindingName <*[LPString, Unit] f2jSpace)                                >>=[LPString, F2JBindingBody]                    (\(name : LPString) ->
+        (f2jLetOptionalTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jLetOptionalBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        (((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType <$>[F2JType, Maybe[F2JType]] (\(t : F2JType) -> Just[F2JType] t))
+            <|>[Maybe[F2JType]] (result[Maybe[F2JType]] (Nothing[F2JType])))
+                                                                        >>=[Maybe[F2JType], F2JBindingBody]             (\(rettype : Maybe[F2JType]) ->
+        (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)  >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        result[F2JBindingBody] (F2JLetBindingBody (lPStringToString name) tparams bparams rettype expr))))));
+
+    let f2jLetRecBindingBody : Parser[F2JBindingBody] =
+        (f2jBindingName <*[LPString, Unit] f2jSpace)                                >>=[LPString, F2JBindingBody]                    (\(name : LPString) ->
+        (f2jLetOptionalTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jLetOptionalBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        ((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType)>>=[F2JType, F2JBindingBody]                    (\(rettype : F2JType) ->
+        (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)      >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        result[F2JBindingBody] (F2JLetRecBindingBody (lPStringToString name) tparams bparams rettype expr))))));
+
+    (f2jKeywordLet >>[LPString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        (
+            ((f2jKeywordRec >>[LPString, Unit] f2jSpace >>[Unit, LPList[F2JBindingBody]]
+                sepby1[F2JBindingBody, LPString] f2jLetRecBindingBody (f2jSpace *>[Unit, LPString] f2jKeywordAnd <*[LPString, Unit] f2jSpace))
+                    >>=[LPList[F2JBindingBody], F2JExpr] (\(bodies : LPList[F2JBindingBody]) ->
+                        (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                            >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                                result[F2JExpr] (F2JLetRec (lPListToPList[F2JBindingBody] bodies) expr))))
+            <|>[F2JExpr]
+            ((sepby1[F2JBindingBody, LPString] f2jLetBindingBody (f2jSpace *>[Unit, LPString] f2jKeywordAnd <*[LPString, Unit] f2jSpace))
+                    >>=[LPList[F2JBindingBody], F2JExpr] (\(bodies : LPList[F2JBindingBody]) ->
+                        (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                            >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                                result[F2JExpr] (F2JLet (lPListToPList[F2JBindingBody] bodies) expr))))
+        )
+
+and f2jCase : Parser[F2JExpr] =
+    let f2jCaseAlternative : Parser[F2JCaseAlternative] =
+        (f2jTypeName <*[LPString, Unit] f2jSpace) >>=[LPString, F2JCaseAlternative]
+            (\(name : LPString) ->
+                (sepby[LPString, Unit] ident f2jSpace1) >>=[LPList[LPString], F2JCaseAlternative]
+                    (\(vars : LPList[LPString]) ->
+                        (f2jSpace >>[Unit, LPString] (string "->") >>[LPString, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr) >>=[F2JExpr, F2JCaseAlternative]
+                            (\(expr : F2JExpr) ->
+                                result[F2JCaseAlternative] (F2JCaseAlternative (lPStringToString name) (lPListToPList[String] (lMap[LPString, String] lPStringToString vars)) expr))));
+
+    let body : Parser[PList[F2JCaseAlternative]] =
+        sepby1[F2JCaseAlternative, Unit] f2jCaseAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace)
+            <$>[LPList[F2JCaseAlternative], PList[F2JCaseAlternative]] (lPListToPList[F2JCaseAlternative]);
+
+    (f2jKeywordCase >>[LPString, Unit] f2jSpace1) >>[Unit, F2JExpr] f2jExpr <*[F2JExpr, Unit] (f2jSpace1 >>[Unit, LPString] f2jKeywordOf >>[LPString, Unit] f2jSpace)
+        >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+            body >>=[PList[F2JCaseAlternative], F2JExpr] (\(b : PList[F2JCaseAlternative]) ->
+                result[F2JExpr] (F2JCase expr b)))
+
+and f2jExprWithBracket : Parser[F2JExpr] =
+    f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jExpr
+
+and f2jExprWithoutApplication : Parser[F2JExpr] =
+        f2jIntLiterial
+    <|>[F2JExpr]
+        f2jTypeAlias
+    <|>[F2JExpr]
+        f2jADT
+    <|>[F2JExpr]
+        f2jPair
+    <|>[F2JExpr]
+        f2jLet
+    <|>[F2JExpr]
+        f2jVariable
+    <|>[F2JExpr]
+        f2jBlockOrRecord
+    <|>[F2JExpr]
+        f2jCase
+    <|>[F2JExpr]
+        f2jExprWithBracket
+
+and f2jExpr : Parser[F2JExpr] =
+    --     f2jIntLiterial
+    -- <|>[F2JExpr]
+    --     f2jTypeAlias
+    -- <|>[F2JExpr]
+    --     f2jADT
+    -- <|>[F2JExpr]
+    --     f2jPair
+    -- <|>[F2JExpr]
+    --     f2jLet
+    -- <|>[F2JExpr]
+    --     f2jVariable
+    -- -- <|>[F2JExpr]
+    -- --     f2jApplication
+    -- <|>[F2JExpr]
+    --     f2jBlock
+    -- <|>[F2JExpr]
+    --     f2jExprWithBracket;
+    --     f2jApplication
+    -- <|>[F2JExpr]
+        f2jExprWithoutApplication
+    <|>[F2JExpr]
+        f2jApplication
+
+and f2jProgram : Parser[F2JExpr] =
+    -- WHY is this needed?
+    -- Because if the last expression of a F2J program is an application,
+    -- `f2jExpr` will first try to recognize it as an `F2JVariable`,
+    -- which is reasonable, but not useful.
+    --
+    -- So we will try to discard all parsing results until we find the expected
+    -- one.
+
+    let rec discard (res : ParseOutput[F2JExpr]) : ParseOutput[F2JExpr] =
+        case res of
+            LNil             -> res
+         |  LCons x xs       ->
+                if lIsempty[Char] x._2._2 then
+                    lSingleton[ParseContext[F2JExpr]] x
+                else
+                    discard (invoke[ParseOutput[F2JExpr]] xs);
+
+    \(inp : ParseInput) -> discard (f2jExpr inp)
+;

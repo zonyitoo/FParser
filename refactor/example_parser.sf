@@ -1,0 +1,10 @@
+{-#
+    INCLUDE "parser_ref.sf"
+#-}
+
+let println (s : String) =
+    java.lang.System.out.println(s);
+
+{
+
+}

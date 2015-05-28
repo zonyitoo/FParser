@@ -1,0 +1,206 @@
+{-#
+    INCLUDE "eq.sf"
+    INCLUDE "testfx.sf"
+    INCLUDE "plist.sf"
+    INCLUDE "pstring.sf"
+    INCLUDE "parser.sf"
+    INCLUDE "test_parser_helpers.sf"
+#-}
+
+-- Test combinators
+
+let testChar : TestFn = {
+    name = "char 'a' (lPStringFromString \"abcd\")",
+    fn   = \(__ : Unit) -> {
+        assertEq[ParseOutput[Char]]
+            (parseOutputEq[Char] charEq)
+            (parseOutputToString[Char] charToString)
+            (char 'a' `parseLPString[Char]` (lPStringFromString "abcd"))
+            (lSingleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (lPStringFromString "bcd"))));
+        True
+    }
+};
+
+let testUpper : TestFn = {
+    name = "upper (lPStringFromString \"ABC\")",
+    fn   = \(__ : Unit) -> {
+        assertEq[ParseOutput[Char]]
+            (parseOutputEq[Char] charEq)
+            (parseOutputToString[Char] charToString)
+            (upper `parseLPString[Char]` (lPStringFromString "ABC"))
+            (lSingleton[ParseContext[Char]] ('A', ((SourcePos "<default>" 1 2), (lPStringFromString "BC"))));
+        True
+    }
+};
+
+let testLetter : TestFn = {
+    name = "letter (lPStringFromString \"abcd\")",
+    fn   = \(__ : Unit) -> {
+        assertEq[ParseOutput[Char]]
+            (parseOutputEq[Char] charEq)
+            (parseOutputToString[Char] charToString)
+            (letter `parseLPString[Char]` (lPStringFromString "abcd"))
+            (lSingleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), (lPStringFromString "bcd"))));
+        True
+    }
+};
+
+let testString : TestFn = {
+    name = "string (lPStringFromString \"abc\") (lPStringFromString \"abcd\")",
+    fn   = \(__ : Unit) -> {
+        assertEq[ParseOutput[LPString]]
+            (parseOutputEq[LPString] lPStringEq)
+            (parseOutputToString[LPString] lPStringToString)
+            ((string "abc") `parseLPString[LPString]` (lPStringFromString "abcd"))
+            (lSingleton[ParseContext[LPString]] ((lPStringFromString "abc"), ((SourcePos "<default>" 1 4), (lPStringFromString "d"))));
+        True
+    }
+};
+
+let testMany : TestFn = {
+    name = "many (char 'a') (lPStringFromString \"aaab\")",
+    fn   = \(__ : Unit) -> {
+        let expected = (lPStringFromString "aaa", ((SourcePos "<default>" 1 4), lPStringFromString "b"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aa", ((SourcePos "<default>" 1 3), lPStringFromString "ab"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "a", ((SourcePos "<default>" 1 2), lPStringFromString "aab"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "", ((SourcePos "<default>" 1 1), lPStringFromString "aaab"))
+            %+>[ParseContext[LPString]] (LNil[ParseContext[LPString]]))));
+        assertEq[ParseOutput[LPString]]
+            (parseOutputEq[LPString] lPStringEq)
+            (parseOutputToString[LPString] lPStringToString)
+            (many[Char] (char 'a') `parseLPString[LPString]` (lPStringFromString "aaab"))
+            expected;
+        True
+    }
+};
+
+let testMany1 : TestFn = {
+    name = "many1 (char 'a') (lPStringFromString \"aaab\")",
+    fn   = \(__ : Unit) -> {
+        let expected = (lPStringFromString "aaa", ((SourcePos "<default>" 1 4), lPStringFromString "b"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aa", ((SourcePos "<default>" 1 3), lPStringFromString "ab"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "a", ((SourcePos "<default>" 1 2), lPStringFromString "aab"))
+            %+>[ParseContext[LPString]] (LNil[ParseContext[LPString]])));
+        assertEq[ParseOutput[LPString]]
+            (parseOutputEq[LPString] lPStringEq)
+            (parseOutputToString[LPString] lPStringToString)
+            (many1[Char] (char 'a') `parseLPString[LPString]` (lPStringFromString "aaab"))
+            expected;
+        True
+    }
+};
+
+let testChoice : TestFn = {
+    name = "choice (char 'a') (char 'b') (lPStringFromString \"aaab\")",
+    fn   = \(__ : Unit) -> {
+        assertEq[ParseOutput[Char]]
+            (parseOutputEq[Char] charEq)
+            (parseOutputToString[Char] charToString)
+            (choice[Char] (char 'a') (char 'b') `parseLPString[Char]` (lPStringFromString "aaab"))
+            (lSingleton[ParseContext[Char]] ('a', ((SourcePos "<default>" 1 2), lPStringFromString "aab")));
+        True
+    }
+};
+
+let testChoice2 : TestFn = {
+    name = "choice (string \"aa\") (string \"aaa\") (lPStringFromString \"aaab\")",
+    fn   = \(__ : Unit) -> {
+        let expected = (lPStringFromString "aa", ((SourcePos "<default>" 1 3), lPStringFromString "ab"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aaa", ((SourcePos "<default>" 1 4), lPStringFromString "b"))
+            %+>[ParseContext[LPString]] (LNil[ParseContext[LPString]]));
+
+        assertEq[ParseOutput[LPString]]
+            (parseOutputEq[LPString] lPStringEq)
+            (parseOutputToString[LPString] lPStringToString)
+            (choice[LPString] (string "aa") (string "aaa")
+                `parseLPString[LPString]` (lPStringFromString "aaab"))
+            expected;
+        True
+    }
+};
+
+let testWord : TestFn = {
+    name = "word (lPStringFromString \"aaabcd abcd\")",
+    fn   = \(__ : Unit) -> {
+        let expected = (lPStringFromString "aaabcd", ((SourcePos "<default>" 1 7), lPStringFromString " abcd"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aaabc", ((SourcePos "<default>" 1 6), lPStringFromString "d abcd"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aaab", ((SourcePos "<default>" 1 5), lPStringFromString "cd abcd"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aaa", ((SourcePos "<default>" 1 4), lPStringFromString "bcd abcd"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "aa", ((SourcePos "<default>" 1 3), lPStringFromString "abcd abcd"))
+            %+>[ParseContext[LPString]] ((lPStringFromString "a", ((SourcePos "<default>" 1 2), lPStringFromString "aabcd abcd"))
+            %+>[ParseContext[LPString]] (LNil[ParseContext[LPString]]))))));
+        assertEq[ParseOutput[LPString]]
+            (parseOutputEq[LPString] lPStringEq)
+            (parseOutputToString[LPString] lPStringToString)
+            (word `parseLPString[LPString]` (lPStringFromString "aaabcd abcd"))
+            expected;
+        True
+    }
+};
+
+let testNatural : TestFn = {
+    name = "natural (lPStringFromString \"12345\")",
+    fn   = \(__ : Unit) -> {
+        let expected = (12345, ((SourcePos "<default>" 1 6), lPStringFromString ""))
+            %+>[ParseContext[Int]] ((1234, ((SourcePos "<default>" 1 5), lPStringFromString "5"))
+            %+>[ParseContext[Int]] ((123, ((SourcePos "<default>" 1 4), lPStringFromString "45"))
+            %+>[ParseContext[Int]] ((12, ((SourcePos "<default>" 1 3), lPStringFromString "345"))
+            %+>[ParseContext[Int]] ((1, ((SourcePos "<default>" 1 2), lPStringFromString "2345"))
+            %+>[ParseContext[Int]] (LNil[ParseContext[Int]])))));
+
+        assertEq[ParseOutput[Int]]
+            (parseOutputEq[Int] intEq)
+            (parseOutputToString[Int] intToString)
+            (natural `parseLPString[Int]` (lPStringFromString "12345"))
+            expected;
+        True
+    }
+};
+
+let testHexDecimal : TestFn = {
+    name = "hexdecimal (lPStringFromString \"a0\")",
+    fn   = \(__ : Unit) ->
+         assertFirstParseOutputEq[Int]
+            intEq
+            intToString
+            (hexdecimal `parseLPString[Int]` (lPStringFromString "a0"))
+            (160, ((SourcePos "<default>" 1 3), lPStringFromString ""))
+};
+
+let testSepby1 : TestFn = {
+    name = "sepby1[LPString, Char] word (char ',') (lPStringFromString \"abc,def\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[PList[LPString]]
+            (pListEq[LPString] lPStringEq)
+            (pListToString[LPString] lPStringToString)
+            (sepby1[LPString, Char] (word) (char ',') `parseLPString[LPList[LPString]]` (lPStringFromString "abc,def"))
+            ((lPStringFromString "abc") %+>[LPString] ((lPStringFromString "def") %+>[LPString] (LNil[LPString])),
+             ((SourcePos "<default>" 1 8), (lPStringFromString "")))
+};
+
+let testNoneOf : TestFn = {
+    name = "noneof (lPStringFromString \"abc\") (lPStringFromString \"dce\")",
+    fn   = \(__ : Unit) ->
+        assertFirstParseOutputEq[Char]
+                charEq
+                charToString
+                (noneof "abc" `parseLPString[Char]` (lPStringFromString "dce"))
+                ('d', ((SourcePos "<default>" 1 2), lPStringFromString "ce"))
+};
+
+let testCombinatorsSuite : TestSuite = {
+    name = "Test Combinators",
+    fns  = testChar
+                %+>[TestFn] (testUpper
+                %+>[TestFn] (testLetter
+                %+>[TestFn] (testString
+                %+>[TestFn] (testMany
+                %+>[TestFn] (testMany1
+                %+>[TestFn] (testChoice
+                %+>[TestFn] (testChoice2
+                %+>[TestFn] (testWord
+                %+>[TestFn] (testNatural
+                %+>[TestFn] (testHexDecimal
+                %+>[TestFn] (testSepby1
+                %+>[TestFn] (Nil[TestFn]))))))))))))
+};

@@ -1,0 +1,28 @@
+#!/bin/sh
+
+rmjava() {
+    for jv in `ls | grep .java`; do
+        echo "Removing $jv"
+        rm $jv
+    done
+}
+
+rmclass() {
+    for cls in `ls | grep .class`; do
+        echo "Removing $cls"
+        rm $cls
+    done
+}
+
+rmsfc() {
+    for sfc in `ls | grep .sfc`; do
+        echo "Removing $sfc"
+        rm $sfc
+    done
+}
+
+rmjava &
+rmsfc &
+rmclass &
+
+wait

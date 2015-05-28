@@ -1,0 +1,20 @@
+{-#
+    INCLUDE "f2j_parser.sf"
+#-}
+
+-- The input string
+let src = "data X[A] = Xx | Xy (X[A]); let x = x; 1";
+
+-- The parse output
+let output = f2jExpr `parseString[F2JExpr]` src;
+
+-- The output is a list of Tuples, which is [(ParseResult, ParseInput)]
+-- The `ParseResult` is what you expected
+-- The output is a list, but you should only concentrated on the first element
+
+case output of
+    Nil         ->  "What! Nothing in the list! Which is a parse error!"
+ |  Cons x _    ->
+        -- The x._1 is what you want
+        -- Try to print it out
+        f2jExprToString x._1

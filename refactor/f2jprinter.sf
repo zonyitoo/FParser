@@ -1,0 +1,1608 @@
+
+data Doc =	NIL
+        |	TEXT String Doc
+		|	LINE Int Doc
+;
+
+let nil = NIL
+;
+
+let rec (<>) (x: Doc) (y: Doc) : Doc=
+	case x of
+			TEXT s d 	-> TEXT s (d <> y)
+		|	LINE i e	-> LINE i (e <> y)		
+		|	NIL 		-> y
+;
+
+let rec nest (i: Int) (x: Doc): Doc=
+	case x of
+			TEXT s d 	-> TEXT s (nest i d)
+		|	LINE j c 	-> LINE (i+j) (nest i c)
+		|	NIL 		-> NIL
+;
+
+let text (s: String): Doc=
+	TEXT s NIL
+;
+
+let line: Doc= 
+	LINE 0 NIL
+;
+
+let concat (x : String) (y : String): String= 
+	x.concat(y)
+;
+
+let rec space (i: Int): String=
+	if i==0 then
+				""
+			 else
+			 	" ".concat(space (i-1))
+;
+
+let rec tab (i: Int): String=
+	if i==0 then
+				""
+			 else
+			 	"\t".concat(tab (i-1))
+;
+
+let rec showDoc(doc: Doc): String=
+	case doc of
+			TEXT s x	-> concat s (showDoc x)
+		|	LINE i d 	-> concat (concat "\n" (space i)) (showDoc d)
+		| 	NIL			-> ""
+;
+data PList[A] = Nil
+              | Cons A (PList[A])
+;
+
+let (+>)[A] (a: A)(l: PList[A]): PList[A]=
+	Cons[A] a l
+;
+
+
+data F2JType = F2JNormalType    String PList[F2JType]
+             | F2JPairedType    PList[F2JType]
+             | F2JFunctionType  F2JType F2JType
+;
+
+
+let lengF2JType (ftype: F2JType): Int=
+	case ftype of
+			F2JNormalType name types -> name.length()
+		|	F2JPairedType types		 -> 4
+		|	F2JFunctionType t1 t2    -> 4
+;
+
+
+let rec showF2JType (ftype: F2JType): Doc=
+	case ftype of
+			F2JNormalType name params -> 
+			{
+				case params of
+					Nil 			  -> text name
+				|	Cons x xs		  -> text name <> text "[" <> (showF2JTypes (x +> xs) ",") <> text "]"
+				
+			}
+		|	F2JPairedType types		  -> text "(" <> (showF2JTypes types ",") <> text ")"
+		|	F2JFunctionType from to   -> showF2JType from <> text " -> " <> showF2JType to
+and
+showF2JTypes (ftypelist: PList[F2JType]) (decollator: String): Doc =
+	case ftypelist of
+			Nil						  -> NIL
+		|	Cons x xs				  -> 
+			{
+				case xs of
+					Nil 			  -> showF2JType x
+				|	Cons y ys 		  -> showF2JType x <> (text decollator) <> (showF2JTypes (y +> ys) decollator)
+			}
+;
+
+
+data F2JBindingParam = F2JBindingParam String F2JType
+;
+
+
+let rec showF2JBindingParam (fbindingparam: F2JBindingParam): Doc=
+	case fbindingparam of
+			F2JBindingParam name types ->
+				text "(" <> text name <> text ": " <> showF2JType types <> text ")"
+and showF2JBindingParams (fbindingparams: PList[F2JBindingParam]): Doc=
+	case fbindingparams of
+			Nil 					-> NIL
+		|	Cons x xs				-> 
+			{
+				case xs of
+					Nil 			-> showF2JBindingParam x
+				|	Cons y ys		-> showF2JBindingParam x <> text " " <> showF2JBindingParams (y +> ys)
+			}
+;
+
+
+data F2JADTAlternative = F2JADTAlternative String PList[F2JType]
+;
+
+
+let rec showF2JADTAlternative (f2jadtalternative: F2JADTAlternative): Doc=
+	case f2jadtalternative  of
+			F2JADTAlternative name types	-> text "\t" <> text name <> text " " <> (showF2JTypes types " ")
+
+and showF2JADTAlternatives (f2jadtalternatives: PList[F2JADTAlternative]) (indent: Int): Doc=
+	case f2jadtalternatives of
+			Nil 					-> NIL
+		|	Cons x xs				->
+			{
+				case xs of
+					Nil 			-> showF2JADTAlternative x
+				|	Cons y ys 		-> showF2JADTAlternative x <> 
+										line <>	text (space indent) <> text "|" <> (showF2JADTAlternatives (y +> ys) indent)
+			}
+;
+
+
+data F2JADTRecordItem = F2JADTRecordItem String F2JType
+;
+
+
+let rec showF2JADTRecordItem (f2jadtrecorditem: F2JADTRecordItem): Doc=
+	case f2jadtrecorditem of
+			F2JADTRecordItem name ty -> text "\t" <> text name <> text "\t\t: " <> showF2JType ty
+
+and showF2JADTRecordItems (f2jadtrecorditems: PList[F2JADTRecordItem]): Doc=
+	case f2jadtrecorditems of
+			Nil 					 -> NIL
+		|	Cons x xs				 -> 
+			{
+				case xs of
+					Nil 			 -> showF2JADTRecordItem x
+				|	Cons y ys		 -> showF2JADTRecordItem x <> text "," <> line <> showF2JADTRecordItems (y +> ys)
+			}
+;
+
+
+data F2JADTBody = F2JADTNormalBody F2JType PList[F2JADTAlternative]
+                | F2JADTRecordBody F2JType PList[F2JADTRecordItem]
+;
+
+
+let rec showF2JADTBody (f2jadtbody: F2JADTBody) (indentation: Int): Doc=
+	case f2jadtbody of
+			F2JADTNormalBody ftype alternatives		-> (showF2JType ftype) <> (text "= ") <> (showF2JADTAlternatives alternatives (lengF2JType(ftype) + indentation)) 
+		|	F2JADTRecordBody ftype recorditems		-> (showF2JType ftype) <> (text "= {") <> line <> (showF2JADTRecordItems recorditems) <> line <> text "}" 
+ 
+and showF2JADTBodys (f2jadtbodys: PList[F2JADTBody]) (indentation: Int): Doc=
+	case f2jadtbodys of
+			Nil 				-> NIL
+		|	Cons x xs 			->
+			{
+				case xs of
+					Nil 		-> showF2JADTBody x indentation
+				|	Cons y ys	-> showF2JADTBody x indentation <> line <> text "and" <> line <> (showF2JADTBodys (y +> ys) indentation )
+			}
+;
+
+type Show[A] = A -> Doc;
+
+
+data Maybe[A] = Nothing
+              | Just A
+;
+
+let showMaybe[A] (show: Show[A]) (mb: Maybe[A]): Doc=
+	case mb of
+			Nothing		-> NIL
+		|	Just x 		-> show x
+;
+
+
+data rec
+    F2JBindingBody = F2JLetBindingBody     String PList[F2JType] PList[F2JBindingParam] Maybe[F2JType] F2JExpr
+                   | F2JLetRecBindingBody  String PList[F2JType] PList[F2JBindingParam] F2JType        F2JExpr
+ 
+and F2JApplicationParam = F2JApplicationParamExpr F2JExpr
+                        | F2JApplicationParamType PList[F2JType]
+
+and F2JCaseAlternative = F2JCaseAlternative String PList[String] F2JExpr
+
+and F2JRecordItem = F2JRecordItem String F2JExpr
+
+and F2JExpr = F2JApplication        F2JExpr                  F2JApplicationParam
+            | F2JLet                PList[F2JBindingBody]    F2JExpr
+            | F2JLetRec             PList[F2JBindingBody]    F2JExpr
+            | F2JLambda             PList[F2JBindingParam]   F2JExpr
+            | F2JCase               F2JExpr                  PList[F2JCaseAlternative]
+            | F2JADT                PList[F2JADTBody]        F2JExpr
+            | F2JRecADT             PList[F2JADTBody]        F2JExpr
+            | F2JTypeAlias          F2JType                  F2JType                     F2JExpr
+            | F2JPair               PList[F2JExpr]
+            | F2JIntLiteral         String
+            | F2JStringLiteral      String
+            | F2JVariable           String
+            | F2JBlock              PList[F2JExpr]
+            | F2JRecord             PList[F2JRecordItem]
+; 
+
+let max (a: Int) (b: Int) : Int=
+    if (a>b) then a else b
+;
+
+let rec lengOfPListString (strs: PList[String]): Int=
+    case strs of
+        Cons x xs -> x.length() + 1 + lengOfPListString(xs)
+    |   Nil       -> 0
+
+;
+
+let rec lengOfF2JCaseAlternative (ca: F2JCaseAlternative): Int=
+    case ca of 
+            F2JCaseAlternative dataname params expr -> (dataname.length()) + 1 + (lengOfPListString params)
+    
+and
+lengOfF2JCaseAlternatives (cas: PList[F2JCaseAlternative]): Int=
+    case cas of
+            Nil         -> 0
+        |   Cons x xs   -> max (lengOfF2JCaseAlternative x) (lengOfF2JCaseAlternatives xs)
+;
+
+
+
+let rec showF2JRecordItem (record: F2JRecordItem): Doc=
+	line <> text "-- F2JRecordItem is TODO" <> line
+
+and showF2JRecordItems (records: PList[F2JRecordItem]): Doc=
+	line <> text "-- F2JRecordItems is TODO" <> line
+
+;
+
+let rec showPListString (ss: PList[String]): Doc=
+	case ss of
+			Nil 		-> NIL
+		|	Cons x xs	-> text x <> text " " <> showPListString xs
+;
+
+let rec showF2JBindingBody (b : F2JBindingBody): Doc =
+    case b of
+        	F2JLetBindingBody name args params rettype expr 	->
+        	{
+        		case args of
+        			Nil 		-> text name <> text " " <> showF2JBindingParams params <> text ": " <> showMaybe[F2JType] showF2JType rettype <> text " =" <> nest 4 (line <> (showF2JExpr expr))
+        		|	Cons x xs	-> text name <> text "[" <> showF2JTypes (x +> xs) "," <> text "] " <> showF2JBindingParams params <> text ": " <> showMaybe[F2JType] showF2JType rettype <> text " =" <> nest 4 (line <> (showF2JExpr expr))
+        	}
+
+     	|  	F2JLetRecBindingBody name args params rettype expr 	->
+     		{
+     			case args of 
+     				Nil 		-> text name <> text " " <> showF2JBindingParams params <> text ": " <> showF2JType rettype <> text " =" <> nest 4 (line <> (showF2JExpr expr))
+     			| 	Cons x xs   -> text name <> text "[" <> showF2JTypes args "," <> text "] " <> showF2JBindingParams params <> text ": " <> showF2JType rettype <> text " =" <> nest 4 (line <> (showF2JExpr expr))
+
+     		}
+     		
+
+and showF2JBindingBodys (bs: PList[F2JBindingBody]): Doc=
+	case bs of
+			Nil 						-> NIL
+		|	Cons x xs					->
+			{
+				case xs of
+					Nil 				-> showF2JBindingBody x
+				|	Cons y ys			-> showF2JBindingBody x <> line <> text "and" <> line <> showF2JBindingBodys (y +> ys) 
+			}
+
+
+and showF2JApplicationParam (ap: F2JApplicationParam): Doc=
+	case ap of
+			F2JApplicationParamExpr expr 	->
+				showF2JExpr expr
+		|	F2JApplicationParamType types	->
+				showF2JTypes types " "
+
+and showF2JCaseAlternative (ca: F2JCaseAlternative) (myLen:Int) (maxLen: Int): Doc=
+	case ca of
+			F2JCaseAlternative dataname params expr 		->
+				text "\t" <> text dataname <> text " " <> showPListString params <> text (space (maxLen - myLen + 2)) <> text "->" <> (nest 12 (line <> showF2JExpr expr)) 
+
+and showF2JCaseAlternatives (cas: PList[F2JCaseAlternative]) (maxLen: Int): Doc=
+	case cas of
+			Nil 						-> NIL
+		|	Cons x xs					->
+			{
+				case xs of
+					Nil 				-> showF2JCaseAlternative x (lengOfF2JCaseAlternative x) maxLen
+				|	Cons y ys 			-> (showF2JCaseAlternative x (lengOfF2JCaseAlternative x) maxLen) <> line <> text "|" <> (showF2JCaseAlternatives (y +> ys) maxLen)
+			}
+and showF2JExpr (expr: F2JExpr): Doc=
+	case expr of
+			F2JApplication f2jexpr apparm 			-> showF2JExpr f2jexpr <> showF2JApplicationParam apparm
+		|	F2JLet bindingbodys f2jexpr 			-> text "let " <> showF2JBindingBodys bindingbodys <> line <> text ";" <> line <> showF2JExpr f2jexpr
+		|	F2JLetRec bindingbodys f2jexpr 			-> text "let rec " <> showF2JBindingBodys bindingbodys <> line <> text ";" <> line <> showF2JExpr f2jexpr
+		|	F2JLambda bindingparams f2jexpr 		-> text "\\" <> showF2JBindingParams bindingparams <> text " -> " <> showF2JExpr f2jexpr
+		| 	F2JCase f2jexpr casealternatives  		-> text "case " <> showF2JExpr f2jexpr <> text " of" <> line <> (showF2JCaseAlternatives casealternatives (lengOfF2JCaseAlternatives casealternatives))
+		|	F2JADT f2jadtbodys f2jexpr 				-> text "Data " <> (showF2JADTBodys f2jadtbodys 7) <> line <> text ";" <> line <> showF2JExpr f2jexpr
+		| 	F2JRecADT f2jadtbodys f2jexpr 			-> text "Data rec " <> (showF2JADTBodys f2jadtbodys 11) <> line <> text ";" <> line <> showF2JExpr f2jexpr
+		|	F2JTypeAlias type1 type2 f2jexpr 		-> text "type " <> showF2JType type1 <> text "= " <> showF2JType type2 <> showF2JExpr f2jexpr
+		|	F2JPair exprs 							-> showF2JExprs exprs
+		|	F2JIntLiteral s 						-> text s
+		|	F2JStringLiteral s 						-> text s
+		|	F2JVariable v 							-> text v
+		|	F2JBlock exprs							-> text "{" <> line <> showF2JExprs exprs <> line <> text "}"
+		|	F2JRecord recorditems 					-> showF2JRecordItems recorditems
+
+and showF2JExprs (exprs: PList[F2JExpr]): Doc=
+	case exprs of
+			Nil 		-> NIL
+		|	Cons x xs	-> showF2JExpr x <> showF2JExprs xs
+
+;
+
+
+
+
+
+
+let println (s : String) : Unit = { java.lang.System.out.println(s); () }
+;
+let print (s : String) : Unit = { java.lang.System.out.print(s); () }
+;
+type TestFn = {
+    name : String,
+    fn   : Unit -> Unit
+}
+;
+let fool (x: Unit) (y: Unit): Unit= {
+	()
+}
+;
+let rec runTest (test : TestFn) : Unit = {
+    let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m\t";
+    println testingPrefix.concat(test.name).concat(" :");
+    test.fn ();
+    println "...check it yourself"
+}
+and 
+runTests (tests: PList[TestFn]): Unit= {
+	case tests of 
+			Nil 			-> ()
+		|	Cons x xs		-> fool (runTest x) (runTests xs) 
+}
+;
+
+
+type Show[A] = A -> String;
+type Eq[A] = A -> A -> Bool;
+
+let charEq (a : Char) (b : Char) : Bool = a.equals(b);
+let intEq (a : Int) (b : Int) : Bool = a.equals(b);
+let boolEq (a : Bool) (b : Bool) : Bool = a.equals(b);
+let unitEq (a : Unit) (b : Unit) : Bool = a == b;
+let stringEq (a : String) (b : String) : Bool = a.equals(b);
+
+let charToString (a : Char) : String = a.toString();
+let intToString (a : Int) : String = a.toString();
+let boolToString (a : Bool) : String = a.toString();
+let unitToString (a : Unit) : String = "()";
+let stringToString (a : String) : String = a;
+
+data Maybe[A] = Nothing
+              | Just A
+              ;
+
+let maybeToString[A] (tostr : Show[A]) (m : Maybe[A]) : String =
+    case m of
+        Nothing     -> "Nothing"
+     |  Just x      -> "Just \{tostr x}";
+
+let maybeEq[A] (eq : Eq[A]) (a : Maybe[A]) (b : Maybe[A]) : Bool =
+    case a of
+        Nothing     ->  {
+            case b of
+                Nothing     -> True
+             |  Just _      -> False
+        }
+     |  Just xa     ->  {
+            case b of
+                Nothing     -> False
+             |  Just xb     -> xa `eq` xb
+        };
+type Thunk[A] = Unit -> A;
+
+let invoke[A] (t : Thunk[A]) : A =
+    t ();
+data Result[S, E] = Ok S
+                  | Err E
+                  ;
+
+let resultEq[S, E] (eqs : Eq[S]) (eqe : Eq[E]) (a : Result[S, E]) (b : Result[S, E]) : Bool =
+    case a of
+        Ok s1 -> {
+            case b of
+                Ok s2 -> eqs s1 s2
+             |  Err _ -> False
+        }
+     |  Err e1 -> {
+            case b of
+                Ok _   -> False
+             |  Err e2 -> eqe e1 e2
+        };
+
+let resultToString[S, E] (sToStr : Show[S]) (eToStr : Show[E]) (r : Result[S, E]) : String =
+    case r of
+        Ok s    -> "Ok \{sToStr s}"
+     |  Err e   -> "Err \{eToStr e}";
+data Order = Equals
+           | GreaterThan
+           | LessThan
+           ;
+
+data PList[A] = Nil
+              | Cons A (Thunk[PList[A]])
+              ;
+
+let rec nats (beg : Int) : PList[Int] =
+    Cons[Int] beg (\(__ : Unit) -> nats (beg+1));
+
+
+let singleton[A] (x : A) : PList[A] =
+    Cons[A] x (\(__: Unit) -> (Nil[A]));
+
+let rec map[A, B] (f : A -> B) (l : PList[A]) : PList[B] =
+    case l of
+        Nil             ->      Nil[B]
+     |  Cons x xs       ->      Cons[B] (f x) (\(__ : Unit) -> (map[A, B] f (invoke[PList[A]] xs)));
+
+let rec foldl[A, B] (f : B -> A -> B) (z : B) (l : PList[A]) : B =
+    case l of
+        Nil             ->      z
+     |  Cons x xs       ->      foldl[A, B] f (f z x) (invoke[PList[A]] xs);
+
+
+let foldr[A, B] (f : A -> B -> B) (z : B) (l : PList[A]) : B =
+    let rec inner (s : PList[A]) (k : B -> B) : B =
+        case s of
+            Nil         -> k z
+         |  Cons x xs   -> inner (invoke[PList[A]] xs) (\(y : B) -> k (f x y));
+    inner l (\(x : B) -> x);
+
+
+let join[A] (l : PList[A]) (j : A) : PList[A] =
+    let rec inner[A] (l : PList[A]) (j : A) : PList[A] =
+        case l of
+            Nil         -> (Nil[A])
+         |  Cons x xs   -> (Cons[A] j (\(__ : Unit) ->
+                                (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j))));
+    case l of
+        Nil         -> (Nil[A])
+     |  Cons x xs   -> (Cons[A] x (\(__ : Unit) -> inner[A] (invoke[PList[A]] xs) j));
+
+let (+>)[A] (a : A) (l : PList[A]) : PList[A] =
+    Cons[A] a (\(__ : Unit) -> l);
+
+let rec concat2[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+    case a of
+        Nil         ->  b
+      | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (concat2[A] (invoke[PList[A]] xs) b));
+
+let rec lazyconcat2[A] (a : PList[A]) (b : Thunk[PList[A]]) : PList[A] =
+    case a of
+        Nil         ->  (invoke[PList[A]] b)
+      | Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (lazyconcat2[A] (invoke[PList[A]] xs) b));
+
+let (++)[A] (a : PList[A]) (b : PList[A]) : PList[A] =
+    concat2[A] a b;
+
+let (+~)[A] (a : PList[A]) (b : Thunk[PList[A]]) : PList[A] =
+    lazyconcat2[A] a b;
+
+let rec concat[A] (l : PList[PList[A]]) : PList[A] =
+    case l of
+        Nil         ->  Nil[A]
+     |  Cons x xs   ->  x +~[A] (\(__ : Unit) -> (concat[A] (invoke[PList[PList[A]]] xs)));
+
+let rec len[A] (l : PList[A]) : Int =
+    case l of
+        Nil         ->  0
+     |  Cons _ xs   ->  1 + (len[A] (invoke[PList[A]] xs));
+
+let isempty[A] (l : PList[A]) : Bool =
+    case l of
+        Nil         -> True
+     |  Cons _ _    -> False;
+
+let first[A] (l : PList[A]) : Maybe[A] =
+    case l of
+        Nil         -> Nothing[A]
+     |  Cons x _    -> Just[A] x;
+
+let rest[A] (l : PList[A]) : Maybe[PList[A]] =
+    case l of
+        Nil         -> Nothing[PList[A]]
+     |  Cons _ xs   -> Just[PList[A]] (invoke[PList[A]] xs);
+
+let rec take[A] (n : Int) (l : PList[A]) : PList[A] =
+    if n <= 0 then
+        (Nil[A])
+    else
+        case l of
+            Nil         ->  Nil[A]
+         |  Cons x xs   ->  Cons[A] x (\(__ : Unit) -> (take[A] (n-1) (invoke[PList[A]] xs)));
+
+let rec zip[A, B] (a : PList[A]) (b : PList[B]) : PList[(A, B)] =
+    case a of
+        Nil         -> Nil[(A, B)]
+     |  Cons xa xsa ->
+            case b of
+                Nil         -> Nil[(A, B)]
+             |  Cons xb xsb ->
+                    Cons[(A, B)] (xa, xb) (\(__ : Unit) -> zip[A, B] (invoke[PList[A]] xsa) (invoke[PList[B]] xsb));
+
+let pListToString[A] (tostr : A -> String) (l : PList[A]) : String =
+    type StringBuilder = java.lang.StringBuilder;
+
+    let inner = foldl[String, StringBuilder]
+                    (\(b : StringBuilder) (a : String) -> b.append(a))
+                    (new java.lang.StringBuilder("["))
+                    (join[String] (map[A, String] tostr l) ", ");
+
+    inner.append("]").toString();
+
+let rec pListEq[A] (eq : Eq[A]) (a : PList[A]) (b : PList[A]) : Bool =
+    case a of
+        Nil         -> { case b of Nil -> True | Cons _ _ -> False }
+     |  Cons ax axs ->
+            case b of
+                Nil         -> False
+             |  Cons bx bxs -> if eq ax bx then
+                                    pListEq[A] eq (invoke[PList[A]] axs) (invoke[PList[A]] bxs)
+                               else False;
+
+
+type PString = PList[Char];
+
+let pStringToString (l : PString) : String =
+    (foldl[Char, java.lang.StringBuilder]
+        (\(b : java.lang.StringBuilder) (a : Char) -> b.append(a))
+        (new java.lang.StringBuilder( ))
+        l).toString();
+
+let pStringFromString (str : String) : PString =
+    let rec inner (str : String) (idx : Int) : PString =
+        if idx `intEq` str.length() then
+            (Nil[Char])
+        else
+            (Cons[Char] str.charAt(idx) (\(__ : Unit) -> (inner str (idx+1))));
+    inner str 0;
+
+let rec pStringEq (a : PString) (b : PString) : Bool =
+    pListEq[Char] charEq a b;
+
+let rec charin (c : Char) (str : PString) : Bool =
+    case str of
+        Nil         ->      False
+     |  Cons x xs   ->      if x.equals(c) then
+                                True
+                            else
+                                (charin c (invoke[PString] xs));
+
+type State[S, A] = S -> (A, S);
+
+data Message = SysUnexpected String
+             | Unexpected String
+             | Expect String
+             | Message String
+             ;
+
+let messageToString (e : Message) : String =
+    case e of
+        SysUnexpected s     -> "SysUnexpected \{s}"
+     |  Unexpected s        -> "Unexpected \{s}"
+     |  Expect s            -> "Expect \{s}"
+     |  Message s           -> "Message \{s}";
+
+type SourceName   = String;
+type Line         = Int;
+type Column       = Int;
+
+data SourcePos = SourcePos SourceName Line Column;
+
+let newSourcePos (name : SourceName) (line : Line) (column : Column) : SourcePos =
+    SourcePos name line column;
+
+let initialPos (s : SourceName) : SourcePos =
+    SourcePos s 1 1;
+
+let sourceName (p : SourcePos) : SourceName =
+    case p of
+        SourcePos name _ _ -> name;
+
+let sourceLine (p : SourcePos) : Line =
+    case p of
+        SourcePos _ line _ -> line;
+
+let sourceColumn (p : SourcePos) : Column =
+    case p of
+        SourcePos _ _ c -> c;
+
+let incSourceLine (p : SourcePos) (n : Line) : SourcePos =
+    case p of
+        SourcePos name line col -> SourcePos name (line+n) col;
+
+let incSourceColumn (p : SourcePos) (n : Column) : SourcePos =
+    case p of
+        SourcePos name line col -> SourcePos name line (col+n);
+
+let updatePosChar (p : SourcePos) (c : Char) : SourcePos =
+    if c `charEq` '\n' then
+        case p of
+            SourcePos name line col -> SourcePos name (line+1) 1
+    else
+        incSourceColumn p 1;
+
+let updatePosPString (p : SourcePos) (s : PString) : SourcePos =
+    foldl[Char, SourcePos] updatePosChar p s;
+
+let sourcePosToString (p : SourcePos) : String =
+    case p of
+        SourcePos name line col ->
+            "\"\{name}\" (\{line}:\{col})";
+
+let sourcePosCompare (p1 : SourcePos) (p2 : SourcePos) : Order =
+    case p1 of
+        SourcePos _ line1 col1 ->
+            case p2 of
+                SourcePos _ line2 col2 ->
+                    if line1 < line2 then LessThan
+                    else if line1 > line2 then GreaterThan
+                    else if col1 < col2 then LessThan
+                    else if col1 > col2 then GreaterThan
+                    else Equals;
+
+let sourcePosEq (p1 : SourcePos) (p2 : SourcePos) : Bool =
+    case p1 `sourcePosCompare` p2 of
+        Equals      -> True
+     |  GreaterThan -> False
+     |  LessThan    -> False;
+
+data ParseError = ParseError SourcePos PList[Message];
+
+let errorPos (p : ParseError) : SourcePos =
+    case p of
+        ParseError pos _ -> pos;
+
+let errorMessages (p : ParseError) : PList[Message] =
+    case p of
+        ParseError _ msgs -> msgs;
+
+let errorIsUnknown (p : ParseError) : Bool =
+    case p of
+        ParseError _ msgs -> isempty[Message] msgs;
+
+let newErrorUnknown (pos : SourcePos) : ParseError =
+    ParseError pos (Nil[Message]);
+
+let newErrorMessage (msg : Message) (pos : SourcePos) =
+    ParseError pos (singleton[Message] msg);
+
+let addErrorMessage (msg : Message) (err : ParseError) =
+    case err of
+        ParseError pos msgs -> ParseError pos (msg +>[Message] msgs);
+
+let mergeError (err1 : ParseError) (err2 : ParseError) : ParseError =
+    case err1 of
+        ParseError pos1 msgs1 ->
+            case err2 of
+                ParseError pos2 msgs2 ->
+                    if isempty[Message] msgs1 then err2
+                    else if isempty[Message] msgs2 then err1
+                    else
+                        case pos1 `sourcePosCompare` pos2 of
+                            Equals      ->  ParseError pos1 (msgs1 ++[Message] msgs2)
+                         |  GreaterThan ->  err1
+                         |  LessThan    ->  err2;
+
+let parseErrorToString (err : ParseError) : String =
+    case err of
+        ParseError pos msgs ->
+            "\{sourcePosToString pos}:\{pListToString[Message] messageToString msgs}";
+
+
+type ParsePos = (SourcePos, SourcePos);
+
+let parseBeginPos (p : ParsePos) : SourcePos =
+    p._1;
+
+let parseEndPos (p : ParsePos) : SourcePos =
+    p._2;
+
+let parsePosEq (a : ParsePos) (b : ParsePos) : Bool =
+    (a._1 `sourcePosEq` b._1) && (a._2 `sourcePosEq` b._2);
+
+let parsePosToString (a : ParsePos) : String =
+    "\{sourcePosToString a._1}..\{sourcePosToString a._2}";
+
+
+type ParseResult[A] = (A, ParsePos);
+
+let parseResultValue[A] (r : ParseResult[A]) : A =
+    r._1;
+
+let parseResultPos[A] (r : ParseResult[A]) : ParsePos =
+    r._2;
+
+let parseResultEq[A] (eq : Eq[A]) (a : ParseResult[A]) (b : ParseResult[A]) : Bool =
+    (a._1 `eq` b._1) && (a._2 `parsePosEq` b._2);
+
+let parseResultToString[A] (str : Show[A]) (res : ParseResult[A]) : String =
+    "(\{str res._1}, \{parsePosToString res._2})";
+
+type ParseInput = (SourcePos, PString);
+
+let newParseInput (pos : SourcePos) (src : PString) : ParseInput =
+    (pos, src);
+
+let parseInputPos (inp : ParseInput) : SourcePos =
+    inp._1;
+
+let parseInputData (inp : ParseInput) : PString =
+    inp._2;
+
+let parseInputInit (src : PString) : ParseInput =
+    (initialPos "<default>", src);
+
+let parseInputInitWithName (name : String) (src : PString) : ParseInput =
+    (initialPos "<default>", src);
+
+let parseInputEq (a : ParseInput) (b : ParseInput) : Bool =
+    (a._1 `sourcePosEq` b._1) && (a._2 `pStringEq` b._2);
+
+let parseInputToString (a : ParseInput) : String =
+    "\"\{pStringToString a._2}\" @ \"\{sourcePosToString a._1}\"";
+
+type ParseContext[A] = (A, ParseInput);
+
+let newParseContext[A] (a : A) (inp : ParseInput) : ParseContext[A] =
+    (a, inp);
+
+let parseContextResult[A] (c : ParseContext[A]) : A =
+    c._1;
+
+let parseContextInput[A] (c : ParseContext[A]) : ParseInput =
+    c._2;
+
+let parseContextEq[A] (eq : Eq[A]) (a : ParseContext[A]) (b : ParseContext[A]): Bool =
+    (eq a._1 b._1) && (a._2 `parseInputEq` b._2);
+
+let parseContextToString[A] (str : Show[A]) (c : ParseContext[A]) : String =
+    "(\{str c._1}, \{parseInputToString c._2})";
+
+
+type ParseOutput[A] = PList[ParseContext[A]];
+
+let parseOutputEq[A] (eq : Eq[A]) (a : ParseOutput[A]) (b : ParseOutput[A]) : Bool =
+    pListEq[ParseContext[A]]
+        (parseContextEq[A] eq)
+        a b;
+
+let parseOutputToString[A] (str : Show[A]) (res : ParseOutput[A]) : String =
+    pListToString[ParseContext[A]]
+        (parseContextToString[A] str)
+        res;
+
+type Parser[A] = ParseInput -> ParseOutput[A];
+
+let parseString[A] (p : Parser[A]) (src : String) : ParseOutput[A] =
+    p (parseInputInit (pStringFromString src));
+
+let parsePString[A] (p : Parser[A]) (src : PString) : ParseOutput[A] =
+    p (parseInputInit src);
+
+let parsePStringWithName[A] (p : Parser[A]) (name : String) (src : PString) : ParseOutput[A] =
+    p (parseInputInitWithName name src);
+
+let parseStringWithName[A] (p : Parser[A]) (name : String) (src : String) : ParseOutput[A] =
+    p (parseInputInitWithName name (pStringFromString src));
+
+
+let result[V] (value : V) : Parser[V] =
+    \(inp : ParseInput) -> singleton[ParseContext[V]] (newParseContext[V] value inp);
+
+let zero[V] : Parser[V] =
+    \(inp : ParseInput) -> Nil[ParseContext[V]];
+
+let item : Parser[Char] =
+    \(inp : ParseInput) ->
+        case parseInputData inp of
+            Nil         ->      Nil[ParseContext[Char]]
+          | Cons c xs   ->
+                singleton[ParseContext[Char]]
+                    (newParseContext[Char] c (newParseInput (updatePosChar (parseInputPos inp) c) (invoke[PString] xs)));
+
+
+let bind[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
+    \(inp : ParseInput) ->
+        concat[ParseContext[B]]
+              (map[ParseContext[A], ParseOutput[B]]
+                  (\(v : ParseContext[A]) -> f (parseContextResult[A] v) (parseContextInput[A] v)) (p inp));
+
+let (>>=)[A, B] (p : Parser[A]) (f : A -> Parser[B]) : Parser[B] =
+    bind[A, B] p f;
+
+let (>>)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[B] =
+    p >>=[A, B] (\(__ : A) -> q);
+
+let (<*)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[A] =
+    p >>=[A, A] (\(a : A) ->
+    q >>=[B, A] (\(__ : B) ->
+    result[A] a));
+
+let (*>)[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[B] =
+    p >>[A, B] q;
+
+let using[A, B] (p : Parser[A]) (f : A -> B) : Parser[B] =
+    bind[A, B] p (\(a : A) -> result[B] (f a));
+
+let (<$>)[A, B] (p : Parser[A]) (f : A -> B) : Parser[B] =
+    using[A, B] p f;
+
+let ($>)[A, B] (p : Parser[A]) (b : B) : Parser[B] =
+    using[A, B] p (\(__ : A) -> b);
+
+let seq[A, B] (p : Parser[A]) (q : Parser[B]) : Parser[(A, B)] =
+    bind[A, (A, B)] p (\(x : A) ->
+    bind[B, (A, B)] q (\(y : B) ->
+    result[(A, B)] (x, y)));
+
+let choice[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    \(inp : ParseInput) ->
+        (p inp) +~[ParseContext[A]] (\(__ : Unit) -> q inp);
+
+let (<|>)[A] (p : Parser[A]) (q : Parser[A]) : Parser[A] =
+    choice[A] p q;
+
+let sat (f : Char -> Bool) : Parser[Char] =
+    bind[Char, Char] item (\(x : Char) -> if f x then (result[Char] x) else zero[Char]);
+
+let char (x : Char) : Parser[Char] =
+    sat (\(y : Char) -> x `charEq` y);
+
+let notchar (x : Char) : Parser[Char] =
+    sat (\(y : Char) -> x != y);
+
+let digit : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isDigit(x));
+
+let upper : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isUpperCase(x));
+
+let lower : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isLowerCase(x));
+
+let space : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isSpaceChar(x));
+
+let whitespace : Parser[Char] =
+    sat (\(x : Char) -> java.lang.Character.isWhitespace(x));
+
+let letter : Parser[Char] =
+    choice[Char] lower upper;
+
+let alphanum : Parser[Char] =
+    choice[Char] letter digit;
+
+let noneof (s : String) : Parser[Char] =
+    sat (\(x : Char) -> (charin x (pStringFromString s)) `boolEq` False);
+
+let oneof (s : String) : Parser[Char] =
+    sat (\(x : Char) -> (charin x (pStringFromString s)));
+
+let rec stringWithPString (s : PString) : Parser[PString] =
+    case s of
+        Nil         ->  result[PString] (Nil[Char])
+     |  Cons x xs   ->
+            let xs = invoke[PString] xs;
+            (char x)
+                >>[Char, PString] (stringWithPString xs)
+                $>[PString, PString] (x +>[Char] xs);
+
+let string (s : String) : Parser[PString] =
+    stringWithPString (pStringFromString s);
+
+let eol : Parser[Unit] =
+    ((string "\r\n") $>[PString, Unit] ())
+        <|>[Unit] ((char '\r')    $>[Char, Unit] ())
+        <|>[Unit] ((char '\n')    $>[Char, Unit] ());
+
+let eof : Parser[Unit] =
+    \(inp : ParseInput) ->
+        case parseInputData inp of
+            Nil         -> singleton[ParseContext[Unit]] (newParseContext[Unit] () inp)
+         |  Cons _ _    -> (Nil[ParseContext[Unit]]);
+
+
+let rec many[A] (p : Parser[A]) : Parser[PList[A]] =
+    choice[PList[A]] (bind[A, PList[A]] p (\(x : A) ->
+                      bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
+                      result[PList[A]] (x +>[A] xs))))
+                     (result[PList[A]] (Nil[A]));
+
+let many1[A] (p : Parser[A]) : Parser[PList[A]] =
+    bind[A, PList[A]] p (\(x : A) ->
+    bind[PList[A], PList[A]] (many[A] p) (\(xs : PList[A]) ->
+    result[PList[A]] (x +>[A] xs)));
+
+let word : Parser[PString] =
+    many1[Char] letter;
+
+let ident : Parser[PString] =
+    bind[Char, PString]    lower (\(x : Char) ->
+    bind[PString, PString] (many[Char] alphanum) (\(xs : PString) ->
+    result[PString] (x +>[Char] xs)));
+
+let natural : Parser[Int] =
+    let eval (xs : PList[Char]) =
+        foldl[Int, Int] (\(b : Int) (a : Int) -> 10 * b + a)
+                        0
+                        (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 10)) xs);
+
+    bind[PList[Char], Int] (many1[Char] digit) (\(xs : PList[Char]) -> result[Int] (eval xs));
+
+let hexdecimal : Parser[Int] =
+    let eval (xs : PList[Char]) =
+        foldl[Int, Int] (\(b : Int) (a : Int) -> 16 * b + a)
+                        0
+                        (map[Char, Int] (\(c : Char) -> java.lang.Character.digit(c, 16)) xs);
+    (many1[Char] (oneof "1234567890abcdefABCDEF"))
+        <$>[PList[Char], Int] (\(xs : PList[Char]) -> eval xs);
+
+let int : Parser[Int] =
+    choice[Int] ((char '-') >>[Char, Int]
+                 (using[Int,Int] natural (\(n : Int) -> (-n))))
+              natural;
+
+
+let sepby1[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
+    let rep[A, B] (p : Parser[A]) : Parser[A] =
+        bind[B, A] sep (\(s : B) -> bind[A, A] p (\(y : A) -> result[A] y));
+    bind[A, PList[A]]        p                       (\(x : A) ->
+    bind[PList[A], PList[A]] (many[A] (rep[A, B] p)) (\(xs : PList[A]) ->
+    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
+
+let sepby2[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
+    let rep[A, B] (p : Parser[A]) : Parser[A] =
+        bind[B, A] sep (\(s : B) -> bind[A, A] p (\(y : A) -> result[A] y));
+    bind[A, PList[A]]        p                       (\(x : A) ->
+    bind[PList[A], PList[A]] (many1[A] (rep[A, B] p)) (\(xs : PList[A]) ->
+    result[PList[A]] (Cons[A] x (\(__ : Unit) -> xs))));
+
+let sepby[A, B] (p : Parser[A]) (sep : Parser[B]) : Parser[PList[A]] =
+    choice[PList[A]] (sepby1[A, B] p sep) (result[PList[A]] (Nil[A]));
+
+let between[L, R, P] (l : Parser[L]) (r : Parser[R]) (p : Parser[P]) : Parser[P] =
+    l *>[L, P] p <*[P, R] r;
+
+
+let chainl1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] =
+    let fy =
+        bind[A -> A -> A, (A -> A -> A, A)] op (\(f : A -> A -> A) ->
+        bind[A, (A -> A -> A, A)]           p  (\(y : A) ->
+        result[(A -> A -> A, A)] (f, y)));
+
+    bind[A, A]                           p                            (\(x : A) ->
+    bind[PList[(A -> A -> A, A)], A]     (many[(A -> A -> A, A)] fy)  (\(fys: PList[(A -> A -> A, A)]) ->
+    result[A] (foldl[(A -> A -> A, A), A] (\(x : A) (fy : (A -> A -> A, A)) -> fy._1 x fy._2) x fys)));
+
+let rec chainr1[A] (p : Parser[A]) (op : Parser[A -> A -> A]) : Parser[A] =
+    bind[A, A] p (\(x : A) ->
+        choice[A] (bind[A -> A -> A, A] op (\(f : A -> A -> A) ->
+                 bind[A, A] (chainr1[A] p op) (\(y : A) -> -- Calculate the result on the right
+                 result[A] (f x y))))
+                (result[A] x));
+
+let chainl[A] (p : Parser[A]) (op : Parser[A -> A -> A]) (v : A) : Parser[A] =
+    choice[A] (chainl1[A] p op) (result[A] v);
+
+let chainr[A] (p : Parser[A]) (op : Parser[A -> A -> A]) (v : A) : Parser[A] =
+    choice[A] (chainr1[A] p op) (result[A] v);
+
+
+let parenthesis[P] (p : Parser[P]) : Parser[P] =
+    between[Char, Char, P] (char '(') (char ')') p;
+
+let braces[P] (p : Parser[P]) : Parser[P] =
+    between[Char, Char, P] (char '{') (char '}') p;
+
+let angles[P] (p : Parser[P]) : Parser[P] =
+    between[Char, Char, P] (char '<') (char '>') p;
+
+let brackets[P] (p : Parser[P]) : Parser[P] =
+    between[Char, Char, P] (char '[') (char ']') p;
+
+
+
+let only[A] (p : Parser[A]) : Parser[A] =
+    \(inp : ParseInput) -> take[ParseContext[A]] 1 (p inp);
+
+
+
+let println (s : String) : Unit = { java.lang.System.out.println(s); () };
+let print (s : String) : Unit = { java.lang.System.out.print(s); () };
+
+type TestFn = {
+    name : String,
+    fn   : Unit -> Unit
+};
+
+type TestSuite = {
+    name : String,
+    fns  : PList[TestFn]
+};
+
+let runTest (test : TestFn) : Unit = {
+    let testingPrefix : String = "\u001b[31;1mtesting\u001b[0m\t";
+    println testingPrefix.concat(test.name).concat(" :");
+    test.fn ();
+    println "\t...passed"
+};
+
+let runTests (tests : PList[TestFn]) : Unit =
+    foldl[TestFn, Unit]
+        (\(__ : Unit) (fn : TestFn) -> runTest fn) () tests;
+
+let runTestSuite (suite : TestSuite) : Unit = {
+    println "\n\t\u001b[32;1mRunning\u001b[37;1m ".concat(suite.name).concat("\u001b[0m ...\n");
+    println "Running ".concat((len[TestFn] suite.fns).toString()).concat(" tests");
+    runTests suite.fns
+};
+
+let runTestSuites (suites : PList[TestSuite]) : Unit =
+    foldl[TestSuite, Unit]
+        (\(__ : Unit) (suite : TestSuite) -> runTestSuite suite) () suites;
+
+
+let assert (b : Bool) =
+    if b then
+        ()
+    else
+        error[Unit] "Assert failed!";
+
+let assertEq[A] (eq : Eq[A]) (show : Show[A]) (src : A) (expected : A) =
+    if src `eq` expected then
+        ()
+    else
+        error[Unit] "Assert failed!\n\tExpecting: \{show expected}\n\tBut Found: \{show src}";
+
+
+data F2JType = F2JNormalType    String PList[F2JType]
+             | F2JPairedType    PList[F2JType]
+             | F2JFunctionType  F2JType F2JType
+             ;
+
+let rec f2jTypeToString (t : F2JType) : String =
+    case t of
+        F2JNormalType name params ->
+            "F2JNormalType \{name} \{pListToString[F2JType] f2jTypeToString params}"
+     |  F2JPairedType types ->
+            "F2JPairedType \{pListToString[F2JType] f2jTypeToString types}"
+     |  F2JFunctionType from to ->
+            "F2JFunctionType (\{f2jTypeToString from} -> \{f2jTypeToString to})";
+
+let rec f2jTypeEq (a : F2JType) (b : F2JType) : Bool =
+    case a of
+        F2JNormalType n1 p1 -> {
+            case b of
+                F2JNormalType n2 p2 -> (n1 `stringEq` n2) && (pListEq[F2JType] f2jTypeEq p1 p2)
+             |  F2JPairedType _     -> False
+             |  F2JFunctionType _ _ -> False
+        }
+     |  F2JPairedType t1 -> {
+            case b of
+                F2JNormalType _ _   -> False
+             |  F2JPairedType t2    -> pListEq[F2JType] f2jTypeEq t1 t2
+             |  F2JFunctionType _ _ -> False
+        }
+     |  F2JFunctionType t1f t1t -> {
+            case b of
+                F2JNormalType _ _       -> False
+             |  F2JPairedType _         -> False
+             |  F2JFunctionType t2f t2t -> (t1f `f2jTypeEq` t2f) && (t1t `f2jTypeEq` t2t)
+        };
+
+data F2JBindingParam = F2JBindingParam String F2JType;
+
+let f2jBindingParamToString (b : F2JBindingParam) : String =
+    case b of
+        F2JBindingParam id t ->
+            "F2JBindingParam \{id} \{f2jTypeToString t}";
+
+let f2jBindingParamEq (a : F2JBindingParam) (b : F2JBindingParam) : Bool =
+    case a of
+        F2JBindingParam ida ta ->
+            case b of
+                F2JBindingParam idb tb ->
+                    (ida `stringEq` idb) && (ta `f2jTypeEq` tb);
+
+data F2JADTAlternative = F2JADTAlternative String PList[F2JType];
+
+let f2jADTAlternativeToString (a : F2JADTAlternative) : String =
+    case a of
+        F2JADTAlternative name args ->
+            "F2JADTAlternative \{name} \{pListToString[F2JType] f2jTypeToString args}";
+
+data F2JADTRecordItem = F2JADTRecordItem String F2JType;
+
+let f2jADTRecordItemToString (a : F2JADTRecordItem) : String =
+    case a of
+        F2JADTRecordItem id t ->
+            "F2JADTRecordItem \{id} \{f2jTypeToString t}";
+
+data F2JADTBody = F2JADTNormalBody F2JType PList[F2JADTAlternative]
+                | F2JADTRecordBody F2JType PList[F2JADTRecordItem]
+                ;
+
+let f2jADTBodyToString (a : F2JADTBody) : String =
+    case a of
+        F2JADTNormalBody t alts ->
+            "F2JADTNormalBody \{f2jTypeToString t} \{pListToString[F2JADTAlternative] f2jADTAlternativeToString alts}"
+     |  F2JADTRecordBody t items ->
+            "F2JADTRecordBody \{f2jTypeToString t} \{pListToString[F2JADTRecordItem] f2jADTRecordItemToString items}"
+     ;
+
+data rec
+    F2JBindingBody = F2JLetBindingBody     String PList[F2JType] PList[F2JBindingParam] Maybe[F2JType] F2JExpr
+                   | F2JLetRecBindingBody  String PList[F2JType] PList[F2JBindingParam] F2JType        F2JExpr
+
+and F2JApplicationParam = F2JApplicationParamExpr F2JExpr
+                        | F2JApplicationParamType PList[F2JType]
+
+and F2JCaseAlternative = F2JCaseAlternative String PList[String] F2JExpr
+
+and F2JRecordItem = F2JRecordItem String F2JExpr
+
+and F2JExpr = F2JApplication        F2JExpr                  F2JApplicationParam
+            | F2JLet                PList[F2JBindingBody]    F2JExpr
+            | F2JLetRec             PList[F2JBindingBody]    F2JExpr
+            | F2JLambda             PList[F2JBindingParam]   F2JExpr
+            | F2JCase               F2JExpr                  PList[F2JCaseAlternative]
+            | F2JADT                PList[F2JADTBody]        F2JExpr
+            | F2JRecADT             PList[F2JADTBody]        F2JExpr
+            | F2JTypeAlias          F2JType                  F2JType                     F2JExpr
+            | F2JPair               PList[F2JExpr]
+            | F2JIntLiteral         String
+            | F2JStringLiteral      String
+            | F2JVariable           String
+            | F2JBlock              PList[F2JExpr]
+            | F2JRecord             PList[F2JRecordItem]
+            ;
+
+let rec f2jBindingBodyToString (b : F2JBindingBody) : String =
+    case b of
+        F2JLetBindingBody name args params rettype expr ->
+            "F2JLetBindingBody \{name} \{pListToString[F2JType] f2jTypeToString args} \{pListToString[F2JBindingParam] f2jBindingParamToString params} \{maybeToString[F2JType] f2jTypeToString rettype} \{f2jExprToString expr}"
+     |  F2JLetRecBindingBody name args params rettype expr ->
+            "F2JLetRecBindingBody \{name} \{pListToString[F2JType] f2jTypeToString args} \{pListToString[F2JBindingParam] f2jBindingParamToString params} \{f2jTypeToString rettype} \{f2jExprToString expr}"
+
+and f2jApplicationParamToString (p : F2JApplicationParam) : String =
+    case p of
+        F2JApplicationParamExpr expr ->
+            "F2JApplicationParamExpr \{f2jExprToString expr}"
+     |  F2JApplicationParamType t ->
+            "F2JApplicationParamType \{pListToString[F2JType] f2jTypeToString t}"
+
+and f2jCaseAlternativeToString (c : F2JCaseAlternative) : String =
+    case c of
+        F2JCaseAlternative name args expr ->
+            "F2JCaseAlternative \{name} \{pListToString[String] stringToString args} -> \{f2jExprToString expr}"
+
+and f2jRecordItemToString (c : F2JRecordItem) : String =
+    case c of
+        F2JRecordItem name expr ->
+            "F2JRecordItem \{name} \{f2jExprToString expr}"
+
+and f2jExprToString (e : F2JExpr) : String =
+    case e of
+        F2JApplication expr param ->
+            "F2JApplication \{f2jExprToString expr}, \{f2jApplicationParamToString param}"
+     |  F2JLet body expr ->
+            "F2JLet \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
+     |  F2JLetRec body expr ->
+            "F2JLetRec \{pListToString[F2JBindingBody] f2jBindingBodyToString body}, \{f2jExprToString expr}"
+     |  F2JLambda params expr ->
+            "F2JLambda \{pListToString[F2JBindingParam] f2jBindingParamToString params}, \{f2jExprToString expr}"
+     |  F2JCase e alts ->
+            "F2JCase \{f2jExprToString e}, \{pListToString[F2JCaseAlternative] f2jCaseAlternativeToString alts}"
+     |  F2JADT body expr ->
+            "F2JADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
+     |  F2JRecADT body expr ->
+            "F2JRecADT \{pListToString[F2JADTBody] f2jADTBodyToString body}, \{f2jExprToString expr}"
+     |  F2JTypeAlias t target expr ->
+            "F2JTypeAlias \{f2jTypeToString t}, \{f2jTypeToString target}, \{f2jExprToString expr}"
+     |  F2JPair conts ->
+            "F2JPair \{pListToString[F2JExpr] f2jExprToString conts}"
+     |  F2JIntLiteral s ->
+            "F2JIntLiteral \{s}"
+     |  F2JStringLiteral s ->
+            "F2JStringLiteral \{s}"
+     |  F2JVariable s ->
+            "F2JVariable \{s}"
+     |  F2JBlock e ->
+            "F2JBlock \{pListToString[F2JExpr] f2jExprToString e}"
+     |  F2JRecord items ->
+            "F2JRecord \{pListToString[F2JRecordItem] f2jRecordItemToString items}"
+     ;
+
+data F2JComment = F2JLineComment String
+                | F2JBlockComment String
+                ;
+
+let f2jCommentToString (tok : F2JComment) : String =
+    case tok of
+        F2JLineComment cmt         -> "F2JLineComment ".concat(cmt)
+     |  F2JBlockComment cmt        -> "F2JBlockComment ".concat(cmt);
+
+let f2jLineComment : Parser[F2JComment] =
+    (string "--")
+        *>[PString, PString]   (many[Char] (noneof "\r\n"))
+        <*[PString, Unit]      (eol <|>[Unit] eof)
+        <$>[PString, F2JComment] (\(cmt : PString) -> F2JLineComment (pStringToString cmt));
+
+let f2jBlockComment : Parser[F2JComment] =
+    let rec nested : Parser[PString] =
+        (string "{-");
+
+    (string "{-")
+        *>[PString, PString] (many[Char] item) -- Need to support nested block comment
+        <*[PString, PString] (string "-}")
+        <$>[PString, F2JComment] (\(cmt : PString) -> F2JBlockComment (pStringToString cmt));
+
+let f2jComment : Parser[F2JComment] =
+    f2jLineComment <|>[F2JComment] f2jBlockComment;
+
+let f2jSpace : Parser[Unit] =
+    many[Char] whitespace $>[PList[Char], Unit] ();
+
+let f2jSpace1 : Parser[Unit] =
+    many1[Char] whitespace $>[PList[Char], Unit] ();
+
+let f2jBetween[L, R, P] (l : Parser[L]) (r : Parser[R]) (p : Parser[P]) : Parser[P] =
+    between[L, R, P] (l <*[L, Unit] f2jSpace) (f2jSpace *>[Unit, R] r) p;
+
+let f2jInfixOpName : Parser[PString] =
+    many1[Char] (oneof "!#$%&*+./<=>?@\\^|-~");
+
+let f2jTypeName : Parser[PString] =
+    upper                                           >>=[Char, PString]      (\(x : Char) ->
+    (many[Char] (alphanum <|>[Char] (char '_')))    >>=[PString, PString]   (\(xs : PString) ->
+    result[PString] (x +>[Char] xs)));
+
+let f2jKeyword (k : String) : Parser[PString] =
+    string k;
+
+let f2jKeywordLet : Parser[PString] =
+    f2jKeyword "let";
+
+let f2jKeywordRec : Parser[PString] =
+    f2jKeyword "rec";
+
+let f2jKeywordAnd : Parser[PString] =
+    f2jKeyword "and";
+
+let f2jKeywordData : Parser[PString] =
+    f2jKeyword "data";
+
+let f2jKeywordType : Parser[PString] =
+    f2jKeyword "type";
+
+let f2jKeywordCase : Parser[PString] =
+    f2jKeyword "case";
+
+let f2jKeywordOf : Parser[PString] =
+    f2jKeyword "of";
+
+let rec f2jTypeParams : Parser[PList[F2JType]] =
+    f2jBetween[Char, Char, PList[F2JType]] (char '[') (char ']')
+        (sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+and f2jPairedType : Parser[F2JType] =
+    f2jBetween[Char, Char, F2JType] (char '(') (char ')')
+        ((sepby1[F2JType, Unit] f2jType (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+            >>=[PList[F2JType], F2JType] (\(types : PList[F2JType]) ->
+
+                (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                    let ftypefrom = F2JPairedType types;
+                    result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+                <|>[F2JType]
+                (result[F2JType] (F2JPairedType types))
+            ))
+and f2jSinglePairedType : Parser[F2JType] =
+    f2jBetween[Char, Char, F2JType] (char '(') (char ')')
+        (f2jType >>=[F2JType, F2JType] (\(t : F2JType) ->
+
+            (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                let ftypefrom = t;
+                result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+            <|>[F2JType]
+                result[F2JType] t))
+and f2jFunctionTypeRest : Parser[F2JType] =
+    (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JType] f2jType
+
+and f2jSingleType : Parser[F2JType] =
+    (f2jTypeName)                                                                                                       >>=[PString, F2JType]        (\(typename : PString) ->
+        ((f2jSpace >>[Unit, PList[F2JType]] f2jTypeParams) <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(tparams : PList[F2JType]) ->
+
+            (f2jSpace >>[Unit, F2JType] f2jFunctionTypeRest >>=[F2JType, F2JType] (\(ftypeto : F2JType) ->
+                let ftypefrom = F2JNormalType (pStringToString typename) tparams;
+                result[F2JType] (F2JFunctionType ftypefrom ftypeto)))
+            <|>[F2JType]
+            (result[F2JType] (F2JNormalType (pStringToString typename) tparams))
+
+        ))
+and f2jNormalType : Parser[F2JType] =
+    (f2jTypeName <*[PString, Unit] f2jSpace) >>=[PString, F2JType] (\(tstr : PString) ->
+        ((f2jTypeParams <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]))) >>=[PList[F2JType], F2JType] (\(params : PList[F2JType]) ->
+            result[F2JType] (F2JNormalType (pStringToString tstr) params))))
+
+and f2jType : Parser[F2JType] =
+        f2jSingleType
+    <|>[F2JType]
+        f2jSinglePairedType
+    <|>[F2JType]
+        f2jPairedType;
+
+let f2jBindingParam : Parser[F2JBindingParam] =
+    let seperator =
+        f2jSpace >>[Unit, Char] (char ':') >>[Char, Unit] f2jSpace;
+
+    let binding =
+        (ident <*[PString, Unit] seperator) >>=[PString, F2JBindingParam] (\(id : PString) ->
+            f2jType <$>[F2JType, F2JBindingParam] (\(t : F2JType) ->
+            F2JBindingParam (pStringToString id) t));
+
+    f2jBetween[Char, Char, F2JBindingParam] (char '(') (char ')')
+        binding;
+let f2jBindingParams : Parser[PList[F2JBindingParam]] =
+    sepby[F2JBindingParam, Unit] f2jBindingParam f2jSpace;
+
+let f2jBindingName : Parser[PString] =
+        ident
+    <|>[PString]
+        f2jBetween[Char, Char, PString] (char '(') (char ')') f2jInfixOpName;
+
+let rec f2jIntLiterial : Parser[F2JExpr] =
+    let nat : Parser[PString] =
+        many1[Char] digit;
+    (nat <|>[PString]
+        (char '-' >>=[Char, PString]
+            (\(minus : Char) -> nat >>=[PString, PString]
+                (\(n : PString) -> result[PString] (minus +>[Char] n)))))
+    <$>[PString, F2JExpr]
+        (\(nstr : PString) -> F2JIntLiteral (pStringToString nstr));
+
+let f2jVariable : Parser[F2JExpr] =
+    let f2jVariableName : Parser[PString] =
+            ident
+        <|>[PString]
+            f2jInfixOpName;
+
+    let rec f2jVariable' : Parser[F2JExpr] =
+        let f2jVariableWithBracket : Parser[F2JExpr] =
+            f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jVariable';
+        (f2jVariableName <$>[PString, F2JExpr] (\(s : PString) -> F2JVariable (pStringToString s)))
+            <|>[F2JExpr] f2jVariableWithBracket;
+
+    only[F2JExpr] f2jVariable';
+
+let f2jADTBody : Parser[F2JADTBody] =
+    let f2jADTAlternative : Parser[F2JADTAlternative] =
+        (f2jTypeName <*[PString, Unit] f2jSpace) >>=[PString, F2JADTAlternative] (\(tname : PString) ->
+            (sepby[F2JType, Unit] f2jType f2jSpace) >>=[PList[F2JType], F2JADTAlternative] (\(types : PList[F2JType]) ->
+                result[F2JADTAlternative] (F2JADTAlternative (pStringToString tname) types)));
+
+    let f2jADTRecordItem : Parser[F2JADTRecordItem] =
+        ident <*[PString, Unit] (f2jSpace >>[Unit, Char] (char ':') >>[Char, Unit] f2jSpace)
+            >>=[PString, F2JADTRecordItem] (\(name : PString) ->
+                f2jType >>=[F2JType, F2JADTRecordItem] (\(t : F2JType) ->
+                    result[F2JADTRecordItem] (F2JADTRecordItem (pStringToString name) t)));
+
+    let f2jADTBodyRecord : Parser[PList[F2JADTRecordItem]] =
+        f2jBetween[Char, Char, PList[F2JADTRecordItem]] (char '{') (char '}')
+            (sepby1[F2JADTRecordItem, Unit] f2jADTRecordItem
+                (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace));
+
+    (f2jNormalType <*[F2JType, Unit] (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace))
+        >>=[F2JType, F2JADTBody] (\(t : F2JType) ->
+            (sepby1[F2JADTAlternative, Unit] f2jADTAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace)
+                >>=[PList[F2JADTAlternative], F2JADTBody] (\(alts : PList[F2JADTAlternative]) ->
+                    result[F2JADTBody] (F2JADTNormalBody t alts)))
+
+            <|>[F2JADTBody]
+
+            (f2jADTBodyRecord >>=[PList[F2JADTRecordItem], F2JADTBody] (\(items : PList[F2JADTRecordItem]) ->
+                result[F2JADTBody] (F2JADTRecordBody t items)))
+        );
+
+let rec f2jTypeAlias : Parser[F2JExpr] =
+    ((string "type") <*[PString, Unit] f2jSpace)
+        >>[PString, F2JType] f2jNormalType >>=[F2JType, F2JExpr] (\(t : F2JType) ->
+            (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace)
+                >>[Unit, F2JType] f2jType >>=[F2JType, F2JExpr] (\(tar : F2JType) ->
+                    (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace)
+                        >>[Unit, F2JExpr] f2jExpr >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                            result[F2JExpr] (F2JTypeAlias t tar expr))))
+
+and f2jADT : Parser[F2JExpr] =
+    let innerBody : Parser[(PList[F2JADTBody], F2JExpr)] =
+        ((sepby1[F2JADTBody, PString] f2jADTBody (f2jSpace *>[Unit, PString] f2jKeywordAnd <*[PString, Unit] f2jSpace))
+            >>=[PList[F2JADTBody], (PList[F2JADTBody], F2JExpr)] (\(ands : PList[F2JADTBody]) ->
+                (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                    >>=[F2JExpr, (PList[F2JADTBody], F2JExpr)] (\(expr : F2JExpr) ->
+                        result[(PList[F2JADTBody], F2JExpr)] (ands, expr))));
+
+    (f2jKeywordData >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        (
+            f2jKeywordRec >>[PString, Unit] f2jSpace >>[Unit, (PList[F2JADTBody], F2JExpr)]
+                innerBody <$>[(PList[F2JADTBody], F2JExpr), F2JExpr]
+                    (\(x : (PList[F2JADTBody], F2JExpr)) -> F2JRecADT x._1 x._2)
+            <|>[F2JExpr]
+            (innerBody <$>[(PList[F2JADTBody], F2JExpr), F2JExpr]
+                (\(x : (PList[F2JADTBody], F2JExpr)) -> F2JADT x._1 x._2))
+        )
+
+and f2jPair : Parser[F2JExpr] =
+    f2jBetween[Char, Char, PList[F2JExpr]] (char '(') (char ')')
+        (sepby2[F2JExpr, Unit] f2jExpr (f2jSpace >>[Unit, Char] (char ',') >>[Char, Unit] f2jSpace))
+        <$>[PList[F2JExpr], F2JExpr] (\(exprs : PList[F2JExpr]) -> F2JPair exprs)
+
+
+and f2jLambda : Parser[F2JExpr] =
+    ((char '\\') >>[Char, Unit] f2jSpace)
+        >>[Unit, PList[F2JBindingParam]] f2jBindingParams >>=[PList[F2JBindingParam], F2JExpr] (\(params : PList[F2JBindingParam]) ->
+            (f2jSpace >>[Unit, PString] (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr
+                >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                    result[F2JExpr] (F2JLambda params expr))))
+
+and f2jApplication : Parser[F2JExpr] =
+    let rec f2jApplicationParam : Parser[F2JApplicationParam] =
+        let f2jApplicationParamWithBracket : Parser[F2JApplicationParam] =
+            f2jBetween[Char, Char, F2JApplicationParam] (char '(') (char ')')
+                f2jApplicationParam;
+
+            (f2jExpr <$>[F2JExpr, F2JApplicationParam] (\(expr : F2JExpr) -> F2JApplicationParamExpr expr))
+        <|>[F2JApplicationParam]
+            (f2jTypeParams <$>[PList[F2JType], F2JApplicationParam] (\(t : PList[F2JType]) -> F2JApplicationParamType t))
+        <|>[F2JApplicationParam]
+            (f2jApplicationParamWithBracket);
+
+    f2jExprWithoutApplication >>=[F2JExpr, F2JExpr] (\(leftmost : F2JExpr) ->
+        many1[F2JApplicationParam] (f2jSpace >>[Unit, F2JApplicationParam] f2jApplicationParam)
+            >>=[PList[F2JApplicationParam], F2JExpr] (\(params : PList[F2JApplicationParam]) ->
+                if isempty[F2JApplicationParam] params then
+                    (result[F2JExpr] leftmost)
+                else
+                    (result[F2JExpr] (foldl[F2JApplicationParam, F2JExpr] (\(b : F2JExpr) (a : F2JApplicationParam) -> F2JApplication b a) leftmost params))))
+
+and f2jBlockOrRecord : Parser[F2JExpr] =
+    let f2jRecordItem : Parser[F2JRecordItem] =
+        ident <*[PString, Unit] (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace)
+            >>=[PString, F2JRecordItem] (\(name : PString) ->
+                f2jExpr >>=[F2JExpr, F2JRecordItem] (\(expr : F2JExpr) ->
+                    result[F2JRecordItem] (F2JRecordItem (pStringToString name) expr)));
+
+    f2jBetween[Char, Char, F2JExpr] (char '{') (char '}')
+        (
+            ((sepby1[F2JExpr, Char] f2jExpr (f2jSpace *>[Unit, Char] (char ';') <*[Char, Unit] f2jSpace))
+                <$>[PList[F2JExpr], F2JExpr] (\(e : PList[F2JExpr]) -> F2JBlock e))
+
+            <|>[F2JExpr]
+
+            ((sepby1[F2JRecordItem, Char] f2jRecordItem (f2jSpace *>[Unit, Char] (char ',') <*[Char, Unit] f2jSpace))
+                <$>[PList[F2JRecordItem], F2JExpr] (\(items : PList[F2JRecordItem]) -> F2JRecord items))
+        )
+
+and f2jLet : Parser[F2JExpr] =
+    let f2jLetOptionalTypeParams : Parser[PList[F2JType]] =
+        f2jTypeParams <|>[PList[F2JType]] (result[PList[F2JType]] (Nil[F2JType]));
+
+    let f2jLetOptionalBindingParams : Parser[PList[F2JBindingParam]] =
+        f2jBindingParams <|>[PList[F2JBindingParam]] (result[PList[F2JBindingParam]] (Nil[F2JBindingParam]));
+
+    let f2jLetBindingBody : Parser[F2JBindingBody] =
+        (f2jBindingName <*[PString, Unit] f2jSpace)                                >>=[PString, F2JBindingBody]                    (\(name : PString) ->
+        (f2jLetOptionalTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jLetOptionalBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        (((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType <$>[F2JType, Maybe[F2JType]] (\(t : F2JType) -> Just[F2JType] t))
+            <|>[Maybe[F2JType]] (result[Maybe[F2JType]] (Nothing[F2JType])))
+                                                                        >>=[Maybe[F2JType], F2JBindingBody]             (\(rettype : Maybe[F2JType]) ->
+        (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)  >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        result[F2JBindingBody] (F2JLetBindingBody (pStringToString name) tparams bparams rettype expr))))));
+
+    let f2jLetRecBindingBody : Parser[F2JBindingBody] =
+        (f2jBindingName <*[PString, Unit] f2jSpace)                                >>=[PString, F2JBindingBody]                    (\(name : PString) ->
+        (f2jLetOptionalTypeParams <*[PList[F2JType], Unit] f2jSpace)               >>=[PList[F2JType], F2JBindingBody]             (\(tparams : PList[F2JType]) ->
+        (f2jLetOptionalBindingParams <*[PList[F2JBindingParam], Unit] f2jSpace)    >>=[PList[F2JBindingParam], F2JBindingBody]     (\(bparams : PList[F2JBindingParam]) ->
+        ((char ':') >>[Char, Unit] f2jSpace >>[Unit, F2JType] f2jNormalType)>>=[F2JType, F2JBindingBody]                    (\(rettype : F2JType) ->
+        (f2jSpace >>[Unit, Char] (char '=') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)      >>=[F2JExpr, F2JBindingBody]                    (\(expr : F2JExpr) ->
+        result[F2JBindingBody] (F2JLetRecBindingBody (pStringToString name) tparams bparams rettype expr))))));
+
+    (f2jKeywordLet >>[PString, Unit] f2jSpace) >>[Unit, F2JExpr]
+        (
+            ((f2jKeywordRec >>[PString, Unit] f2jSpace >>[Unit, PList[F2JBindingBody]]
+                sepby1[F2JBindingBody, PString] f2jLetRecBindingBody (f2jSpace *>[Unit, PString] f2jKeywordAnd <*[PString, Unit] f2jSpace))
+                    >>=[PList[F2JBindingBody], F2JExpr] (\(bodies : PList[F2JBindingBody]) ->
+                        (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                            >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                                result[F2JExpr] (F2JLetRec bodies expr))))
+            <|>[F2JExpr]
+            ((sepby1[F2JBindingBody, PString] f2jLetBindingBody (f2jSpace *>[Unit, PString] f2jKeywordAnd <*[PString, Unit] f2jSpace))
+                    >>=[PList[F2JBindingBody], F2JExpr] (\(bodies : PList[F2JBindingBody]) ->
+                        (f2jSpace >>[Unit, Char] (char ';') >>[Char, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr)
+                            >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+                                result[F2JExpr] (F2JLet bodies expr))))
+        )
+
+and f2jCase : Parser[F2JExpr] =
+    let f2jCaseAlternative : Parser[F2JCaseAlternative] =
+        (f2jTypeName <*[PString, Unit] f2jSpace) >>=[PString, F2JCaseAlternative]
+            (\(name : PString) ->
+                (sepby[PString, Unit] ident f2jSpace1) >>=[PList[PString], F2JCaseAlternative]
+                    (\(vars : PList[PString]) ->
+                        (f2jSpace >>[Unit, PString] (string "->") >>[PString, Unit] f2jSpace >>[Unit, F2JExpr] f2jExpr) >>=[F2JExpr, F2JCaseAlternative]
+                            (\(expr : F2JExpr) ->
+                                result[F2JCaseAlternative] (F2JCaseAlternative (pStringToString name) (map[PString, String] pStringToString vars) expr))));
+
+    let body : Parser[PList[F2JCaseAlternative]] =
+        sepby1[F2JCaseAlternative, Unit] f2jCaseAlternative (f2jSpace >>[Unit, Char] (char '|') >>[Char, Unit] f2jSpace);
+
+    (f2jKeywordCase >>[PString, Unit] f2jSpace1) >>[Unit, F2JExpr] f2jExpr <*[F2JExpr, Unit] (f2jSpace1 >>[Unit, PString] f2jKeywordOf >>[PString, Unit] f2jSpace)
+        >>=[F2JExpr, F2JExpr] (\(expr : F2JExpr) ->
+            body >>=[PList[F2JCaseAlternative], F2JExpr] (\(b : PList[F2JCaseAlternative]) ->
+                result[F2JExpr] (F2JCase expr b)))
+
+and f2jExprWithBracket : Parser[F2JExpr] =
+    f2jBetween[Char, Char, F2JExpr] (char '(') (char ')') f2jExpr
+
+and f2jExprWithoutApplication : Parser[F2JExpr] =
+        f2jIntLiterial
+    <|>[F2JExpr]
+        f2jTypeAlias
+    <|>[F2JExpr]
+        f2jADT
+    <|>[F2JExpr]
+        f2jPair
+    <|>[F2JExpr]
+        f2jLet
+    <|>[F2JExpr]
+        f2jVariable
+    <|>[F2JExpr]
+        f2jBlockOrRecord
+    <|>[F2JExpr]
+        f2jCase
+    <|>[F2JExpr]
+        f2jExprWithBracket
+
+and f2jExpr : Parser[F2JExpr] =
+        f2jExprWithoutApplication
+    <|>[F2JExpr]
+        f2jApplication
+
+and f2jProgram : Parser[F2JExpr] =
+
+    let rec discard (res : ParseOutput[F2JExpr]) : ParseOutput[F2JExpr] =
+        case res of
+            Nil             -> res
+         |  Cons x xs       ->
+                if isempty[Char] x._2._2 then
+                    singleton[ParseContext[F2JExpr]] x
+                else
+                    discard (invoke[ParseOutput[F2JExpr]] xs);
+
+    \(inp : ParseInput) -> discard (f2jExpr inp)
+;
+
+let printFirstF2JParseResult (l : ParseOutput[F2JExpr]) =
+    let result =
+        case l of
+            Nil             -> "Empty result!"
+         |  Cons x _        -> showDoc (showF2JExpr (x._1))
+    ;
+
+    println result
+;
+printFirstF2JParseResult (f2jProgram `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1")

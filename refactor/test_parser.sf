@@ -191,16 +191,16 @@ let testNoneOf : TestFn = {
 let testCombinatorsSuite : TestSuite = {
     name = "Test Combinators",
     fns  = testChar
-                %+>[TestFn] (testUpper
-                %+>[TestFn] (testLetter
-                %+>[TestFn] (testString
-                %+>[TestFn] (testMany
-                %+>[TestFn] (testMany1
-                %+>[TestFn] (testChoice
-                %+>[TestFn] (testChoice2
-                %+>[TestFn] (testWord
-                %+>[TestFn] (testNatural
-                %+>[TestFn] (testHexDecimal
-                %+>[TestFn] (testSepby1
-                %+>[TestFn] (Nil[TestFn]))))))))))))
+                +>[TestFn] (testUpper
+                +>[TestFn] (testLetter
+                +>[TestFn] (testString
+                +>[TestFn] (testMany
+                +>[TestFn] (testMany1
+                +>[TestFn] (testChoice
+                +>[TestFn] (testChoice2
+                +>[TestFn] (testWord
+                +>[TestFn] (testNatural
+                +>[TestFn] (testHexDecimal
+                +>[TestFn] (testSepby1
+                +>[TestFn] (Nil[TestFn]))))))))))))
 };

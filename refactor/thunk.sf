@@ -1,5 +1,0 @@
--- Definition of Thunk
-type Thunk[A] = Unit -> A;
-
-let invoke[A] (t : Thunk[A]) : A =
-    t ();

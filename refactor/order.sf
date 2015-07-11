@@ -1,5 +1,0 @@
--- Order
-data Order = Equals
-           | GreaterThan
-           | LessThan
-           ;

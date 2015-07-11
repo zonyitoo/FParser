@@ -1,9 +1,0 @@
-
-{-#
-    INCLUDE "maybe.sf"
-    INCLUDE "show.sf"
-    INCLUDE "eq.sf"
-    INCLUDE "thunk.sf"
-    INCLUDE "result.sf"
-    INCLUDE "order.sf"
-#-}

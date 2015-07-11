@@ -91,6 +91,7 @@ let arithExprMulDiv : Parser[ArithExpr -> ArithExpr -> ArithExpr] =
 let arithExprInteger : Parser[ArithExpr] =
     (((char '-') <*[Char, Unit] arithExprSpace)
         >>[Char, ArithExpr] (natural <$>[Int, ArithExpr] (\(i : Int) -> Integer (0 - i))))
+    <|>[ArithExpr]
     (((char '+') <*[Char, Unit] arithExprSpace)
         >>[Char, ArithExpr] (natural <$>[Int, ArithExpr] (\(i : Int) -> Integer i)))
     <|>[ArithExpr]

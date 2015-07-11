@@ -1,0 +1,11 @@
+{-#
+    INCLUDE "simple_arith_expr_parser.sf"
+#-}
+
+{
+    let result = expr `parseString[Int]` "1+1*(2+3)";
+
+    println (parseOutputToString[Int] intToString result);
+
+    "\nEND"
+}

@@ -2,23 +2,51 @@
 
 -- Simple arithmetic expression
 
+{-
+    -- Left recursion
+    expr ::= term | expr + term | expr - term
+    term ::= factor | term * factor | term / factor
+    factor ::= number | ( expr )
+
+    -- fixed
+    expr ::= term expr'
+    expr' ::= e | + term expr' | - term expr'
+    term ::= factor term'
+    term' ::= e | * factor term' | / factor term'
+    factor ::= number | ( expr )
+-}
+
 let bracket[B] (p : Parser[B]) : Parser[B] =
     between[Char, Char, B] (char '(') (char ')') p;
 
-let operation =
+let add_sub : Parser[Int -> Int -> Int] =
     let addop (a : Int) (b : Int) : Int = a + b;
     let subop (a : Int) (b : Int) : Int = a - b;
-    let mulop (a : Int) (b : Int) : Int = a * b;
-    let divop (a : Int) (b : Int) : Int = a / b;
 
     let add = (char '+') $>[Char, Int -> Int -> Int] addop;
     let sub = (char '-') $>[Char, Int -> Int -> Int] subop;
+
+    add `choice[Int -> Int -> Int]` sub;
+
+let mul_div : Parser[Int -> Int -> Int] =
+    let mulop (a : Int) (b : Int) : Int = a * b;
+    let divop (a : Int) (b : Int) : Int = a / b;
+
     let mul = (char '*') $>[Char, Int -> Int -> Int] mulop;
     let div = (char '/') $>[Char, Int -> Int -> Int] divop;
 
-    add `choice[Int -> Int -> Int]` sub `choice[Int -> Int -> Int]` mul `choice[Int -> Int -> Int]` div;
+    mul `choice[Int -> Int -> Int]` div;
+
+let apply_op (left : Parser[Int]) (op : Parser[Int -> Int -> Int]) (right : Parser[Int]) : Parser[Int] =
+    left >>=[Int, Int] (\(l : Int) ->
+    op >>=[Int -> Int -> Int, Int] (\(o : Int -> Int -> Int) ->
+    right >>=[Int, Int] (\(r : Int) ->
+    result[Int] (o l r))));
 
 let rec expr : Parser[Int] =
-    \(s : ParseInput) -> chainl1[Int] factor operation s
+    \(s : ParseInput) -> chainl1[Int] term add_sub s
 and factor : Parser[Int] =
-    \(s : ParseInput) -> choice[Int] natural (bracket[Int] expr) s;
+    \(s : ParseInput) -> choice[Int] natural (bracket[Int] expr) s
+and term : Parser[Int] =
+    \(s : ParseInput) -> chainl1[Int] factor mul_div s;
+

@@ -1,0 +1,11 @@
+{-#
+    INCLUDE "f2j_parser.sf"
+#-}
+
+{
+    let result = f2jProgram `parseString[F2JExpr]` "let hello = world; hello";
+
+    println (parseOutputToString[F2JExpr] f2jExprToString result);
+
+    "\nEND"
+}

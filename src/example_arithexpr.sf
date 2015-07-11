@@ -11,6 +11,10 @@
 
     println (parseOutputToString[Int] intToString result);
 
+    let result = arithExpr `parseString[ArithExpr]` "1+-1*(2+3)";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
 
     "\nEND"
 }

@@ -16,37 +16,105 @@
     factor ::= number | ( expr )
 -}
 
-let bracket[B] (p : Parser[B]) : Parser[B] =
-    between[Char, Char, B] (char '(') (char ')') p;
+data ArithExpr = Add ArithExpr ArithExpr
+               | Sub ArithExpr ArithExpr
+               | Mul ArithExpr ArithExpr
+               | Div ArithExpr ArithExpr
+               | Integer Int
+               ;
 
-let add_sub : Parser[Int -> Int -> Int] =
-    let addop (a : Int) (b : Int) : Int = a + b;
-    let subop (a : Int) (b : Int) : Int = a - b;
+let rec arithExprToString (e : ArithExpr) : String =
+    case e of
+        Add e1 e2 -> "Add(\{arithExprToString e1}, \{arithExprToString e2})"
+     |  Sub e1 e2 -> "Sub(\{arithExprToString e1}, \{arithExprToString e2})"
+     |  Mul e1 e2 -> "Mul(\{arithExprToString e1}, \{arithExprToString e2})"
+     |  Div e1 e2 -> "Div(\{arithExprToString e1}, \{arithExprToString e2})"
+     |  Integer i -> "Integer(\{intToString i})"
+     ;
 
-    let add = (char '+') $>[Char, Int -> Int -> Int] addop;
-    let sub = (char '-') $>[Char, Int -> Int -> Int] subop;
+let rec arithExprEq (a : ArithExpr) (b : ArithExpr) : Bool =
+    case a of
+        Add ae1 ae2 -> {
+            case b of
+                Add be1 be2 -> (arithExprEq ae1 be1) && (arithExprEq ae2 be2)
+             |  _ -> False
+        }
+     |  Sub ae1 ae2 -> {
+            case b of
+                Sub be1 be2 -> (arithExprEq ae1 be1) && (arithExprEq ae2 be2)
+             |  _ -> False
+        }
+     |  Mul ae1 ae2 -> {
+            case b of
+                Mul be1 be2 -> (arithExprEq ae1 be1) && (arithExprEq ae2 be2)
+             |  _ -> False
+        }
+     |  Div ae1 ae2 -> {
+            case b of
+                Div be1 be2 -> (arithExprEq ae1 be1) && (arithExprEq ae2 be2)
+             |  _ -> False
+        }
+     |  Integer ai -> {
+            case b of
+                Integer bi -> (ai == bi)
+             |  _ -> False
+        }
+     ;
 
-    add `choice[Int -> Int -> Int]` sub;
+let arithExprSpace : Parser[Unit] =
+    many[Char] space $>[PList[Char], Unit] ();
 
-let mul_div : Parser[Int -> Int -> Int] =
-    let mulop (a : Int) (b : Int) : Int = a * b;
-    let divop (a : Int) (b : Int) : Int = a / b;
+let arithExprBracketSurrounded[E] (p : Parser[E]) : Parser[E] =
+    between[Char, Char, E]
+        ((char '(') <*[Char, Unit] arithExprSpace)
+        ((char ')') <*[Char, Unit] arithExprSpace)
+        p;
 
-    let mul = (char '*') $>[Char, Int -> Int -> Int] mulop;
-    let div = (char '/') $>[Char, Int -> Int -> Int] divop;
+let arithExprAddSub : Parser[ArithExpr -> ArithExpr -> ArithExpr] =
+    let addop (a : ArithExpr) (b : ArithExpr) = Add a b;
+    let subop (a : ArithExpr) (b : ArithExpr) = Sub a b;
 
-    mul `choice[Int -> Int -> Int]` div;
+    let add = (char '+') $>[Char, ArithExpr -> ArithExpr -> ArithExpr] addop;
+    let sub = (char '-') $>[Char, ArithExpr -> ArithExpr -> ArithExpr] subop;
 
-let apply_op (left : Parser[Int]) (op : Parser[Int -> Int -> Int]) (right : Parser[Int]) : Parser[Int] =
-    left >>=[Int, Int] (\(l : Int) ->
-    op >>=[Int -> Int -> Int, Int] (\(o : Int -> Int -> Int) ->
-    right >>=[Int, Int] (\(r : Int) ->
-    result[Int] (o l r))));
+    add `choice[ArithExpr -> ArithExpr -> ArithExpr]` sub;
 
-let rec expr : Parser[Int] =
-    \(s : ParseInput) -> chainl1[Int] term add_sub s
-and factor : Parser[Int] =
-    \(s : ParseInput) -> choice[Int] natural (bracket[Int] expr) s
-and term : Parser[Int] =
-    \(s : ParseInput) -> chainl1[Int] factor mul_div s;
+let arithExprMulDiv : Parser[ArithExpr -> ArithExpr -> ArithExpr] =
+    let mulop (a : ArithExpr) (b : ArithExpr) = Mul a b;
+    let divop (a : ArithExpr) (b : ArithExpr) = Div a b;
 
+    let mul = (char '*') $>[Char, ArithExpr -> ArithExpr -> ArithExpr] mulop;
+    let div = (char '/') $>[Char, ArithExpr -> ArithExpr -> ArithExpr] divop;
+
+    mul `choice[ArithExpr -> ArithExpr -> ArithExpr]` div;
+
+let arithExprInteger : Parser[ArithExpr] =
+    natural <$>[Int, ArithExpr] (\(i : Int) -> Integer i);
+
+let rec arithExpr : Parser[ArithExpr] =
+    \(s : ParseInput) ->
+        chainl1[ArithExpr]
+            (arithExprTerm <*[ArithExpr, Unit] arithExprSpace)
+            (arithExprAddSub <*[ArithExpr -> ArithExpr -> ArithExpr, Unit] arithExprSpace)
+            s
+and arithExprFactor : Parser[ArithExpr] =
+    \(s : ParseInput) ->
+        choice[ArithExpr]
+            (arithExprInteger <*[ArithExpr, Unit] arithExprSpace)
+            ((arithExprBracketSurrounded[ArithExpr] arithExpr) <*[ArithExpr, Unit] arithExprSpace)
+            s
+and arithExprTerm : Parser[ArithExpr] =
+    \(s : ParseInput) ->
+        chainl1[ArithExpr]
+            (arithExprFactor <*[ArithExpr, Unit] arithExprSpace)
+            (arithExprMulDiv <*[ArithExpr -> ArithExpr -> ArithExpr, Unit] arithExprSpace)
+            s;
+
+let rec arithExprEval (e : ArithExpr) : Int =
+    case e of
+        Integer i -> i
+     |  Add e1 e2 -> (arithExprEval e1) + (arithExprEval e2)
+     |  Sub e1 e2 -> (arithExprEval e1) - (arithExprEval e2)
+     |  Mul e1 e2 -> (arithExprEval e1) * (arithExprEval e2)
+     |  Div e1 e2 -> (arithExprEval e1) / (arithExprEval e2)
+     ;

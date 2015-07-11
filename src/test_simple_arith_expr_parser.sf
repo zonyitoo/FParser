@@ -9,62 +9,62 @@
 -- Test Simple ARithmetic Expression Parser
 
 let testSimpleExpr : TestFn = {
-    name = "expr (pStringFromString \"123\")",
+    name = "(arithExpr <$>[ArithExpr, Int] arithExprEval) (pStringFromString \"123\")",
     fn   = \(__ : Unit) ->
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parsePString[Int]` (pStringFromString "123"))
+            ((arithExpr <$>[ArithExpr, Int] arithExprEval) `parsePString[Int]` (pStringFromString "123"))
             (123, ((SourcePos "<default>" 1 4), pStringFromString ""))
 };
 
 let testSimpleExprWithBracket : TestFn = {
-    name = "expr (pStringFromString \"(123)\")",
+    name = "(arithExpr <$>[ArithExpr, Int] arithExprEval) (pStringFromString \"(123)\")",
     fn   = \(__ : Unit) ->
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parsePString[Int]` (pStringFromString "(123)"))
+            ((arithExpr <$>[ArithExpr, Int] arithExprEval) `parsePString[Int]` (pStringFromString "(123)"))
             (123, ((SourcePos "<default>" 1 6), pStringFromString ""))
 };
 
 let testSimpleExpr2 : TestFn = {
-    name = "expr (pStringFromString \"1+2\")",
+    name = "(arithExpr <$>[ArithExpr, Int] arithExprEval) (pStringFromString \"1+2\")",
     fn   = \(__ : Unit) ->
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parsePString[Int]` (pStringFromString "1+2"))
+            ((arithExpr <$>[ArithExpr, Int] arithExprEval) `parsePString[Int]` (pStringFromString "1+2"))
             (3, ((SourcePos "<default>" 1 4), pStringFromString ""))
 };
 
 let testSimpleExpr3 : TestFn = {
-    name = "expr (pStringFromString \"10+2\")",
+    name = "(arithExpr <$>[ArithExpr, Int] arithExprEval) (pStringFromString \"10+2\")",
     fn   = \(__ : Unit) ->
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parsePString[Int]` (pStringFromString "10+2"))
+            ((arithExpr <$>[ArithExpr, Int] arithExprEval) `parsePString[Int]` (pStringFromString "10+2"))
             (12, ((SourcePos "<default>" 1 5), pStringFromString ""))
 };
 
 let testSimpleExpr4 : TestFn = {
-    name = "expr (pStringFromString \"(10+2)*2\")",
+    name = "(arithExpr <$>[ArithExpr, Int] arithExprEval) (pStringFromString \"(10+2)*2\")",
     fn   = \(__ : Unit) ->
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parsePString[Int]` (pStringFromString "(10+2)*2"))
+            ((arithExpr <$>[ArithExpr, Int] arithExprEval) `parsePString[Int]` (pStringFromString "(10+2)*2"))
             (24, ((SourcePos "<default>" 1 9), pStringFromString ""))
 };
 
 let testSimpleExpr5 : TestFn = {
-    name = "expr (pStringFromString \"(10+2)*2/6\")",
+    name = "(arithExpr <$>[ArithExpr, Int] arithExprEval) (pStringFromString \"(10+2)*2/6\")",
     fn   = \(__ : Unit) ->
         assertFirstParseOutputEq[Int]
             intEq
             intToString
-            (expr `parsePString[Int]` (pStringFromString "(10+2)*2/6"))
+            ((arithExpr <$>[ArithExpr, Int] arithExprEval) `parsePString[Int]` (pStringFromString "(10+2)*2/6"))
             (4, ((SourcePos "<default>" 1 11), pStringFromString ""))
 };
 

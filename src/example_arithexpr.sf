@@ -3,9 +3,14 @@
 #-}
 
 {
-    let result = expr `parseString[Int]` "1+1*(2+3)";
+    let result = arithExpr `parseString[ArithExpr]` "1+1*(2+3)";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = (arithExpr <$>[ArithExpr, Int] (\(e : ArithExpr) -> arithExprEval e)) `parseString[Int]` "1+1*(2+3)";
 
     println (parseOutputToString[Int] intToString result);
+
 
     "\nEND"
 }

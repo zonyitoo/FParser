@@ -7,5 +7,8 @@
 
     println (parseOutputToString[F2JExpr] f2jExprToString result);
 
+    let result = f2jProgram `parseString[F2JExpr]` "data PList[A] = Nil | Cons A (PList[A]); let rec recursive[A] (a : A) : A = recursive[A] a; recursive[Int] 1";
+    println (parseOutputToString[F2JExpr] f2jExprToString result);
+
     "\nEND"
 }

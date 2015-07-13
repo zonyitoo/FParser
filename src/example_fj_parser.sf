@@ -36,7 +36,7 @@
              (pListToString[FJClass] fjClassToString)
              (fjParse
                     `parseString[PList[FJClass]]`
-                "class A extends B { int a; A() { super(); } void kill(int you) { this.a; }} class B { int b = 1; }"));
+                "class A extends B { int a; A() { super(); } void sayHello(int you) { this.a; } int answer() { return 42; }} class B { int b = 1; }"));
 
     "\nEnd"
 }

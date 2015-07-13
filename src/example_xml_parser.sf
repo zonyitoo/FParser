@@ -1,0 +1,29 @@
+{-#
+    INCLUDE "xml_parser.sf"
+#-}
+
+{
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<a></a>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<a/>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<a>hello&quot;</a>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<a key=\"value\"></a>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<a><nested/></a>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<a><![CDATA[<hello>]]></a>>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    let result = parseXML `parseString[PList[XMLNode]]` "<?xml encoding=\"UTF-8\"?><answer>42</answer>";
+    println (parseOutputToString[PList[XMLNode]] (pListToString[XMLNode] xmlNodeToString) result);
+
+    "\nEND"
+}

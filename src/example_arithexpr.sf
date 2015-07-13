@@ -15,6 +15,46 @@
 
     println (parseOutputToString[ArithExpr] arithExprToString result);
 
+    let result = arithExpr `parseString[ArithExpr]` "1";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1+1";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1-1";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1*1";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1/1";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1+2*3";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "(1+2)*3";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1*2+3";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1*(2+3)";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
+    let result = arithExpr `parseString[ArithExpr]` "1+2*(3-4)/5";
+
+    println (parseOutputToString[ArithExpr] arithExprToString result);
+
 
     "\nEND"
 }
